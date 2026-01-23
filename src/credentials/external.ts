@@ -105,6 +105,10 @@ export async function discoverFromExternal(
       return readJsonKeyCredentials(resolvedPath, externalPath.key);
     case 'json-oauth':
       return readJsonOAuthCredentials(resolvedPath);
+    case 'opencode-oauth':
+      return readOpenCodeOAuthCredentials(resolvedPath, externalPath.key);
+    case 'opencode-api':
+      return readOpenCodeApiCredentials(resolvedPath, externalPath.key);
     default:
       return null;
   }
@@ -275,6 +279,105 @@ async function readJsonOAuthCredentials(filePath: string): Promise<Credentials |
     oauth: buildOAuthCredentials(accessToken, refreshToken, expiresAt, accountId),
     source: 'external',
   };
+}
+
+interface OpenCodeAuthEntry {
+  type: 'oauth' | 'api' | 'wellknown';
+  access?: string;
+  refresh?: string;
+  expires?: number;
+  key?: string;
+  token?: string;
+  groupId?: string;
+  accountId?: string;
+}
+
+async function readOpenCodeOAuthCredentials(
+  filePath: string,
+  providerId?: string
+): Promise<Credentials | null> {
+  if (!providerId) return null;
+
+  const data = await readJsonFile<Record<string, OpenCodeAuthEntry>>(filePath);
+  if (!data) return null;
+
+  const entry = data[providerId];
+  if (!entry) return null;
+
+  if (entry.type === 'oauth') {
+    if (!entry.access) return null;
+    return {
+      oauth: buildOAuthCredentials(
+        entry.access,
+        entry.refresh,
+        entry.expires,
+        entry.accountId
+      ),
+      source: 'opencode',
+    };
+  }
+
+  if (entry.type === 'api') {
+    if (!entry.key) return null;
+    return {
+      apiKey: entry.key,
+      source: 'opencode',
+    };
+  }
+
+  if (entry.type === 'wellknown') {
+    const token = entry.token || entry.key;
+    if (!token) return null;
+    return {
+      apiKey: token,
+      source: 'opencode',
+    };
+  }
+
+  return null;
+}
+
+async function readOpenCodeApiCredentials(
+  filePath: string,
+  providerId?: string
+): Promise<Credentials | null> {
+  if (!providerId) return null;
+
+  const data = await readJsonFile<Record<string, OpenCodeAuthEntry>>(filePath);
+  if (!data) return null;
+
+  const entry = data[providerId];
+  if (!entry) return null;
+
+  if (entry.type === 'api' && entry.key) {
+    const creds: Credentials = {
+      apiKey: entry.key,
+      source: 'opencode',
+    };
+    if (entry.groupId) {
+      creds.groupId = entry.groupId;
+    }
+    return creds;
+  }
+
+  if (entry.type === 'wellknown') {
+    const token = entry.token || entry.key;
+    if (token) {
+      return {
+        apiKey: token,
+        source: 'opencode',
+      };
+    }
+  }
+
+  if (entry.type === 'oauth' && entry.access) {
+    return {
+      apiKey: entry.access,
+      source: 'opencode',
+    };
+  }
+
+  return null;
 }
 
 export function getExternalPaths(): typeof EXTERNAL_PATHS {

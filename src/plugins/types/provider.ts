@@ -25,6 +25,7 @@ export interface ProviderAuthConfig {
 export interface Credentials {
   apiKey?: string;
   oauth?: OAuthCredentials;
+  groupId?: string;
   source: 'env' | 'opencode' | 'external' | 'config';
 }
 
