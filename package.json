@@ -1,0 +1,52 @@
+{
+  "name": "tokentop",
+  "version": "0.1.0",
+  "description": "Real-time AI token usage monitor - htop for your API costs",
+  "author": "Nigel",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ttop": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "bun --hot src/cli.ts",
+    "start": "bun src/cli.ts",
+    "build": "bun build ./src/cli.ts --outdir=dist --target=bun --minify",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.74",
+    "@opentui/react": "^0.1.74",
+    "react": "^19.0.0",
+    "react-devtools-core": "^7.0.1",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.0.0"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "token",
+    "usage",
+    "monitor",
+    "tui",
+    "terminal",
+    "htop",
+    "anthropic",
+    "openai",
+    "claude",
+    "gpt"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tokentopapp/tokentop"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
