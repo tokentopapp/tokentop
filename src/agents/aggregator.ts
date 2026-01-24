@@ -47,6 +47,7 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
   const sessionMap = new Map<string, {
     projectPath?: string;
     timestamps: number[];
+    sessionUpdatedAt?: number;
     streamMap: Map<string, { key: StreamKey; tokens: TokenCounts; requestCount: number }>;
   }>();
 
@@ -56,12 +57,14 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
       const newSession: {
         projectPath?: string;
         timestamps: number[];
+        sessionUpdatedAt?: number;
         streamMap: Map<string, { key: StreamKey; tokens: TokenCounts; requestCount: number }>;
       } = {
         timestamps: [],
         streamMap: new Map(),
       };
       if (row.projectPath) newSession.projectPath = row.projectPath;
+      if (row.sessionUpdatedAt) newSession.sessionUpdatedAt = row.sessionUpdatedAt;
       sessionMap.set(row.sessionId, newSession);
     }
     
@@ -70,6 +73,9 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     session.timestamps.push(row.timestamp);
     if (row.projectPath && !session.projectPath) {
       session.projectPath = row.projectPath;
+    }
+    if (row.sessionUpdatedAt && (!session.sessionUpdatedAt || row.sessionUpdatedAt > session.sessionUpdatedAt)) {
+      session.sessionUpdatedAt = row.sessionUpdatedAt;
     }
 
     const streamKey: StreamKey = { providerId: row.providerId, modelId: row.modelId };
@@ -94,7 +100,8 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
   for (const [sessionId, session] of sessionMap) {
     const startedAt = Math.min(...session.timestamps);
     const lastActivityAt = Math.max(...session.timestamps);
-    const status = (now - lastActivityAt) <= activeThresholdMs ? 'active' : 'idle';
+    const lastSeenAt = session.sessionUpdatedAt ?? lastActivityAt;
+    const status = (now - lastSeenAt) <= activeThresholdMs ? 'active' : 'idle';
 
     const streams: AgentSessionStream[] = [];
     let totals: TokenCounts = { input: 0, output: 0 };

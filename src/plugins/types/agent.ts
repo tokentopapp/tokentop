@@ -47,6 +47,7 @@ export interface SessionUsageData {
     cacheWrite?: number;
   };
   timestamp: number;
+  sessionUpdatedAt?: number;
   projectPath?: string;
   cost?: number;
 }

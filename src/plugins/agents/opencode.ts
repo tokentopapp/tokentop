@@ -297,6 +297,7 @@ export const opencodeAgentPlugin: AgentPlugin = {
             output: message.tokens.output ?? 0,
           },
           timestamp: message.time.completed ?? message.time.created,
+          sessionUpdatedAt: session.time.updated,
         };
 
         if (message.tokens.cache?.read) {
