@@ -53,4 +53,7 @@ temp/
 .tmp/
 .temp/
 
+# Docs (keep local, not tracked)
+docs/
+
 
