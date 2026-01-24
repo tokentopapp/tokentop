@@ -10,6 +10,7 @@ import { LogProvider, useLogs } from './contexts/LogContext.tsx';
 import { InputProvider, useInputFocus } from './contexts/InputContext.tsx';
 import { AgentSessionProvider } from './contexts/AgentSessionContext.tsx';
 import { StorageProvider } from './contexts/StorageContext.tsx';
+import { TimeWindowProvider } from './contexts/TimeWindowContext.tsx';
 import { Header } from './components/Header.tsx';
 import { StatusBar } from './components/StatusBar.tsx';
 import { DebugConsole, copyLogsToClipboard, type DebugConsoleHandle } from './components/DebugConsole.tsx';
@@ -254,11 +255,13 @@ export function App({ initialTheme, refreshInterval = 60000, debug = false }: Ap
       <InputProvider>
         <StorageProvider>
           <ThemeProvider {...themeProviderProps}>
-            <PluginProvider>
-              <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
-                <AppContent refreshInterval={refreshInterval} />
-              </AgentSessionProvider>
-            </PluginProvider>
+            <TimeWindowProvider defaultWindow="5m">
+              <PluginProvider>
+                <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
+                  <AppContent refreshInterval={refreshInterval} />
+                </AgentSessionProvider>
+              </PluginProvider>
+            </TimeWindowProvider>
           </ThemeProvider>
         </StorageProvider>
       </InputProvider>

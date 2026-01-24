@@ -4,8 +4,10 @@ import { useColors } from '../contexts/ThemeContext.tsx';
 import { usePlugins } from '../contexts/PluginContext.tsx';
 import { useInputFocus } from '../contexts/InputContext.tsx';
 import { useAgentSessions } from '../contexts/AgentSessionContext.tsx';
+import { useTimeWindow } from '../contexts/TimeWindowContext.tsx';
 import { DebugInspectorOverlay } from '../components/DebugInspectorOverlay.tsx';
 import { KpiStrip } from '../components/KpiStrip.tsx';
+import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer.tsx';
 
 function LimitGauge({ 
   label, 
@@ -89,6 +91,7 @@ function HelpOverlay() {
       <box marginTop={1}><text fg={colors.primary}><strong>Actions</strong></text></box>
       <box flexDirection="row"><text width={12} fg={colors.textMuted}>/</text><text>Filter sessions</text></box>
       <box flexDirection="row"><text width={12} fg={colors.textMuted}>s</text><text>Toggle sort</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>t</text><text>Cycle time window</text></box>
       <box flexDirection="row"><text width={12} fg={colors.textMuted}>i</text><text>Toggle sidebar</text></box>
       <box flexDirection="row"><text width={12} fg={colors.textMuted}>r</text><text>Refresh data</text></box>
       
@@ -107,6 +110,7 @@ export function RealTimeDashboard() {
   const { providers } = usePlugins();
   const { setInputFocused } = useInputFocus();
   const { sessions: agentSessions, isLoading, refreshSessions } = useAgentSessions();
+  const { windowMs, cycleWindow, windowLabel } = useTimeWindow();
   
   // Sparkline data for activity visualization
   const [sparkData, setSparkData] = useState<number[]>([]);
@@ -114,12 +118,22 @@ export function RealTimeDashboard() {
   // UI State
   const [showHelp, setShowHelp] = useState(false);
   const [showDebugInspector, setShowDebugInspector] = useState(false);
+  const [showSessionDrawer, setShowSessionDrawer] = useState(false);
   const [selectedRow, setSelectedRow] = useState(0);
   const [focusedPanel, setFocusedPanel] = useState<'sessions' | 'sidebar'>('sessions');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [sortField, setSortField] = useState<'cost' | 'tokens' | 'time'>('cost');
+  
+  // Refs to avoid stale closures in useKeyboard
+  const isFilteringRef = useRef(isFiltering);
+  const modalOpenRef = useRef(false);
+  
+  useEffect(() => {
+    isFilteringRef.current = isFiltering;
+    modalOpenRef.current = showHelp || showDebugInspector || showSessionDrawer;
+  }, [isFiltering, showHelp, showDebugInspector, showSessionDrawer]);
   
   const historyRef = useRef<{time: number, cost: number, tokens: number}[]>([]);
   const [deltas, setDeltas] = useState({ cost: 0, tokens: 0, windowSec: 0 });
@@ -190,7 +204,7 @@ export function RealTimeDashboard() {
     historyRef.current.push({ time: currentTime, cost: totalCost, tokens: totalTokens });
     if (historyRef.current.length > 300) historyRef.current.shift();
 
-    const targetTime = currentTime - 5 * 60 * 1000;
+    const targetTime = windowMs !== null ? currentTime - windowMs : 0;
     let baseline = historyRef.current[0];
     for (let i = historyRef.current.length - 1; i >= 0; i--) {
       if (historyRef.current[i]!.time <= targetTime) {
@@ -238,7 +252,7 @@ export function RealTimeDashboard() {
     
     emaRef.current.lastTokens = totalTokens;
     emaRef.current.lastTime = currentTime;
-  }, [agentSessions, isLoading]);
+  }, [agentSessions, isLoading, windowMs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -255,6 +269,11 @@ export function RealTimeDashboard() {
 
   const processedSessions = useMemo(() => {
     let result = [...agentSessions];
+    
+    if (windowMs !== null) {
+      const cutoff = Date.now() - windowMs;
+      result = result.filter(s => s.lastActivityAt >= cutoff);
+    }
     
     if (filterQuery) {
       const q = filterQuery.toLowerCase();
@@ -276,7 +295,7 @@ export function RealTimeDashboard() {
     });
 
     return result;
-  }, [agentSessions, filterQuery, sortField]);
+  }, [agentSessions, filterQuery, sortField, windowMs]);
 
   useKeyboard((key) => {
     if (key.sequence === '?' || (key.shift && key.name === '/')) {
@@ -289,16 +308,23 @@ export function RealTimeDashboard() {
       return;
     }
 
-    if (showHelp || showDebugInspector) {
+    if (modalOpenRef.current) {
       if (key.name === 'escape' || key.name === 'q' || key.sequence === '?') {
         setShowHelp(false);
         setShowDebugInspector(false);
+        setShowSessionDrawer(false);
       }
       return;
     }
 
-    if (isFiltering) {
-      if (key.name === 'escape' || key.name === 'enter') {
+    if (isFilteringRef.current) {
+      if (key.name === 'enter' || key.name === 'return') {
+        setIsFiltering(false);
+        setInputFocused(false);
+        return;
+      }
+      if (key.name === 'escape') {
+        setFilterQuery('');
         setIsFiltering(false);
         setInputFocused(false);
         return;
@@ -334,6 +360,11 @@ export function RealTimeDashboard() {
       setSortField(curr => curr === 'cost' ? 'tokens' : 'cost');
       return;
     }
+    
+    if (key.name === 't') {
+      cycleWindow();
+      return;
+    }
 
     if (key.name === 'r') {
       refreshSessions();
@@ -345,6 +376,8 @@ export function RealTimeDashboard() {
         setSelectedRow(curr => Math.min(curr + 1, processedSessions.length - 1));
       } else if (key.name === 'up' || key.name === 'k') {
         setSelectedRow(curr => Math.max(curr - 1, 0));
+      } else if (key.name === 'return' && processedSessions.length > 0) {
+        setShowSessionDrawer(true);
       }
     }
   });
@@ -386,6 +419,12 @@ export function RealTimeDashboard() {
           debugData={debugDataRef.current}
           activity={activity}
           sparkData={sparkData}
+        />
+      )}
+      {showSessionDrawer && processedSessions[selectedRow] && (
+        <SessionDetailsDrawer 
+          session={processedSessions[selectedRow]} 
+          onClose={() => setShowSessionDrawer(false)} 
         />
       )}
       
@@ -432,7 +471,7 @@ export function RealTimeDashboard() {
             <text fg={colors.textMuted}>
               SESSIONS{isFiltering ? ` (Filter: ${filterQuery})` : ''}{isLoading ? ' ⟳' : '  '}
             </text>
-            <text fg={colors.textMuted}>{processedSessions.length} sessions</text>
+            <text fg={colors.textMuted}>[{windowLabel}] {processedSessions.length} sessions</text>
           </box>
           
           <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1}>
