@@ -1,11 +1,53 @@
 import { useState, useEffect, useCallback, forwardRef } from 'react';
-import { useKeyboard } from '@opentui/react';
 import type { BoxRenderable } from '@opentui/core';
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { UsageGauge } from './UsageGauge.tsx';
 import { useSpinner } from './Spinner.tsx';
 import { SkeletonProviderContent } from './Skeleton.tsx';
 import type { ProviderUsageData } from '@/plugins/types/provider.ts';
+
+interface CompactGaugeProps {
+  label: string;
+  usedPercent: number | null;
+  windowMinutes?: number | undefined;
+  resetsAt?: number | undefined;
+  color?: string | undefined;
+}
+
+function CompactGauge({ label, usedPercent, windowMinutes, resetsAt, color }: CompactGaugeProps) {
+  const colors = useColors();
+  const providerColor = color ?? colors.primary;
+  const percent = usedPercent ?? 0;
+  
+  const barWidth = 12;
+  const filledWidth = Math.round((percent / 100) * barWidth);
+  const emptyWidth = barWidth - filledWidth;
+  
+  const fillColor = percent >= 90 ? colors.gaugeDanger :
+                    percent >= 70 ? colors.gaugeWarning :
+                    providerColor;
+  
+  const filledBar = '█'.repeat(filledWidth);
+  const emptyBar = '░'.repeat(emptyWidth);
+  
+  const windowText = windowMinutes ? formatWindowCompact(windowMinutes) : '';
+  const resetText = resetsAt ? formatResetTime(resetsAt) : '';
+  const suffix = [windowText, resetText].filter(Boolean).join(' · ');
+  
+  return (
+    <box flexDirection="row" gap={1}>
+      <text>
+        <span fg={providerColor}>{label}</span>
+        <span fg={colors.textMuted}> [</span>
+        <span fg={fillColor}>{filledBar}</span>
+        <span fg={colors.gaugeBackground}>{emptyBar}</span>
+        <span fg={colors.textMuted}>] </span>
+        <span fg={colors.text}>{percent !== null ? `${Math.round(percent)}%` : '--'}</span>
+        {suffix && <span fg={colors.textSubtle}> ({suffix})</span>}
+      </text>
+    </box>
+  );
+}
 
 interface ProviderCardProps {
   name: string;
@@ -30,8 +72,6 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
   const providerColor = color ?? colors.primary;
   const spinnerFrame = useSpinner();
 
-  const [page, setPage] = useState(0);
-  const [autoRotate, setAutoRotate] = useState(true);
   const [pulseStep, setPulseStep] = useState(0);
 
   const rawItems = usage?.limits?.items;
@@ -41,62 +81,7 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
     ? [...rawItems].sort((a, b) => (b.usedPercent ?? 0) - (a.usedPercent ?? 0))
     : [];
   
-  const hasUrgentLimit = sortedItems.some(item => (item.usedPercent ?? 0) >= 80);
-  const effectiveAutoRotate = autoRotate && !hasUrgentLimit;
-  
-  const totalPages = hasItems ? Math.ceil(sortedItems.length / 2) : 0;
-  const safePage = totalPages > 0 ? page % totalPages : 0;
-
-  const goNext = useCallback(() => {
-    if (totalPages > 1) {
-      setPage((p) => (p + 1) % totalPages);
-    }
-  }, [totalPages]);
-
-  const goPrev = useCallback(() => {
-    if (totalPages > 1) {
-      setPage((p) => (p - 1 + totalPages) % totalPages);
-    }
-  }, [totalPages]);
-
-  const toggleAutoRotate = useCallback(() => {
-    setAutoRotate((a) => !a);
-  }, []);
-
-  useKeyboard((key) => {
-    if (!focused || totalPages <= 1) return;
-
-    switch (key.name) {
-      case 'left':
-      case 'h':
-        goPrev();
-        setAutoRotate(false);
-        break;
-      case 'right':
-      case 'l':
-        goNext();
-        setAutoRotate(false);
-        break;
-      case 'space':
-      case 'enter':
-        toggleAutoRotate();
-        break;
-    }
-  });
-
-  useEffect(() => {
-    if (!hasItems || totalPages <= 1 || !effectiveAutoRotate) return;
-    const timer = setInterval(() => {
-      setPage((p) => (p + 1) % totalPages);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [hasItems, totalPages, effectiveAutoRotate]);
-
-  useEffect(() => {
-    if (totalPages > 0 && page >= totalPages) {
-      setPage(0);
-    }
-  }, [totalPages, page]);
+  const useCompactMode = sortedItems.length > 3;
 
   useEffect(() => {
     if (!usage?.limitReached) {
@@ -129,7 +114,6 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
                      '●';
 
   const isInitialLoad = loading && !usage;
-  const showPagination = hasItems && totalPages > 1;
 
   const getWarningBorderColor = (step: number, baseColor: string): string => {
     const intensity = Math.sin((step / 12) * Math.PI);
@@ -157,7 +141,6 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
       flexDirection="column"
       gap={1}
       width={44}
-      minHeight={10}
       onMouseDown={handleClick}
     >
       <box flexDirection="row" justifyContent="space-between" alignItems="center">
@@ -166,16 +149,9 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
             <strong>{name}</strong>
           </span>
         </text>
-        <box flexDirection="row" alignItems="center" gap={1}>
-          {focused && showPagination && (
-            <box onMouseDown={toggleAutoRotate}>
-              <text fg={colors.textSubtle}>{effectiveAutoRotate ? '▶' : '⏸'}</text>
-            </box>
-          )}
-          <text fg={statusColor}>
-            {configured && loading ? spinnerFrame : statusIcon}
-          </text>
-        </box>
+        <text fg={statusColor}>
+          {configured && loading ? spinnerFrame : statusIcon}
+        </text>
       </box>
 
       {!configured && (
@@ -199,25 +175,29 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
 
             {hasItems ? (
               <>
-                {sortedItems.slice(safePage * 2, safePage * 2 + 2).map((limit, idx) => (
-                  <UsageGauge
-                    key={`${safePage}-${idx}`}
-                    label={limit.label ?? 'Usage'}
-                    usedPercent={limit.usedPercent}
-                    color={providerColor}
-                    {...(limit.windowMinutes ? { windowLabel: formatWindow(limit.windowMinutes) } : {})}
-                    {...(limit.resetsAt ? { resetsAt: limit.resetsAt } : {})}
-                  />
-                ))}
-                {safePage === 0 && totalPages > 1 && (() => {
-                  const hiddenItems = sortedItems.slice(2);
-                  const hiddenUrgent = hiddenItems.some(i => (i.usedPercent ?? 0) >= 80);
-                  return hiddenItems.length > 0 ? (
-                    <text fg={hiddenUrgent ? colors.warning : colors.textMuted}>
-                      +{hiddenItems.length} more{hiddenUrgent ? ' ⚠' : ''}
-                    </text>
-                  ) : null;
-                })()}
+                {useCompactMode ? (
+                  sortedItems.map((limit, idx) => (
+                    <CompactGauge
+                      key={idx}
+                      label={limit.label ?? 'Usage'}
+                      usedPercent={limit.usedPercent}
+                      color={providerColor}
+                      {...(limit.windowMinutes ? { windowMinutes: limit.windowMinutes } : {})}
+                      {...(limit.resetsAt ? { resetsAt: limit.resetsAt } : {})}
+                    />
+                  ))
+                ) : (
+                  sortedItems.map((limit, idx) => (
+                    <UsageGauge
+                      key={idx}
+                      label={limit.label ?? 'Usage'}
+                      usedPercent={limit.usedPercent}
+                      color={providerColor}
+                      {...(limit.windowMinutes ? { windowLabel: formatWindow(limit.windowMinutes) } : {})}
+                      {...(limit.resetsAt ? { resetsAt: limit.resetsAt } : {})}
+                    />
+                  ))
+                )}
               </>
             ) : (
               <>
@@ -252,18 +232,6 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
               </box>
             )}
           </box>
-
-          {showPagination && (
-            <box flexDirection="row" justifyContent="center">
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <box key={i} onMouseDown={() => { setPage(i); setAutoRotate(false); }}>
-                  <text fg={i === safePage ? colors.text : colors.textSubtle}>
-                    {i === safePage ? ' ● ' : ' ○ '}
-                  </text>
-                </box>
-              ))}
-            </box>
-          )}
         </box>
       )}
     </box>
@@ -281,6 +249,37 @@ function formatWindow(minutes: number): string {
     return `${hours}-hour window`;
   }
   return `${minutes}-minute window`;
+}
+
+function formatWindowCompact(minutes: number): string {
+  if (minutes >= 1440) {
+    const days = Math.round(minutes / 1440);
+    return `${days}d`;
+  }
+  if (minutes >= 60) {
+    const hours = Math.round(minutes / 60);
+    return `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+
+function formatResetTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = timestamp - now;
+
+  if (diff <= 0) return 'soon';
+
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return `${days}d ${hours % 24}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  return `${minutes}m`;
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {

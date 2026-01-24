@@ -188,9 +188,6 @@ export function HistoricalTrendsView() {
     if (key.name === 'right') {
       setPeriod(prev => prev === '7d' ? '30d' : prev === '30d' ? '90d' : '90d');
     }
-    if (key.name === '1') setPeriod('7d');
-    if (key.name === '2') setPeriod('30d');
-    if (key.name === '3') setPeriod('90d');
   });
 
   return (
@@ -219,11 +216,11 @@ export function HistoricalTrendsView() {
 
       <box flexDirection="row" marginTop={1} height={1}>
         <text height={1} fg={colors.textSubtle}>
-          <span fg={period === '7d' ? colors.primary : colors.textSubtle}>[1] 7d</span>
+          <span fg={period === '7d' ? colors.primary : colors.textSubtle}>7d</span>
           {'  '}
-          <span fg={period === '30d' ? colors.primary : colors.textSubtle}>[2] 30d</span>
+          <span fg={period === '30d' ? colors.primary : colors.textSubtle}>30d</span>
           {'  '}
-          <span fg={period === '90d' ? colors.primary : colors.textSubtle}>[3] 90d</span>
+          <span fg={period === '90d' ? colors.primary : colors.textSubtle}>90d</span>
           {'      '}
           ←/→ Select Period
         </text>

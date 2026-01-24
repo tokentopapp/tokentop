@@ -14,7 +14,8 @@ import { TimeWindowProvider } from './contexts/TimeWindowContext.tsx';
 import { Header } from './components/Header.tsx';
 import { StatusBar } from './components/StatusBar.tsx';
 import { DebugConsole, copyLogsToClipboard, type DebugConsoleHandle } from './components/DebugConsole.tsx';
-import { Toast, useToast } from './components/Toast.tsx';
+import { Toast } from './components/Toast.tsx';
+import { ToastProvider, useToastContext } from './contexts/ToastContext.tsx';
 import { RealTimeDashboard } from './views/RealTimeDashboard.tsx';
 import { Dashboard } from './views/Dashboard.tsx';
 import { HistoricalTrendsView } from './views/HistoricalTrendsView.tsx';
@@ -35,7 +36,7 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
   const colors = useColors();
   const { refreshAllProviders, isInitialized } = usePlugins();
   const { logs, isConsoleOpen, toggleConsole, closeConsole, clearLogs, exportLogs, info } = useLogs();
-  const { toast, showToast, dismissToast } = useToast();
+  const { toast, showToast, dismissToast } = useToastContext();
   const { isInputFocused } = useInputFocus();
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
@@ -270,11 +271,13 @@ export function App({ initialTheme, refreshInterval = 60000, debug = false }: Ap
         <StorageProvider>
           <ThemeProvider {...themeProviderProps}>
             <TimeWindowProvider defaultWindow="5m">
-              <PluginProvider>
-                <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
-                  <AppContent refreshInterval={refreshInterval} />
-                </AgentSessionProvider>
-              </PluginProvider>
+              <ToastProvider>
+                <PluginProvider>
+                  <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
+                    <AppContent refreshInterval={refreshInterval} />
+                  </AgentSessionProvider>
+                </PluginProvider>
+              </ToastProvider>
             </TimeWindowProvider>
           </ThemeProvider>
         </StorageProvider>

@@ -6,9 +6,12 @@ import { usePlugins } from '../contexts/PluginContext.tsx';
 import { useInputFocus } from '../contexts/InputContext.tsx';
 import { useAgentSessions } from '../contexts/AgentSessionContext.tsx';
 import { useTimeWindow } from '../contexts/TimeWindowContext.tsx';
+import { useToastContext } from '../contexts/ToastContext.tsx';
 import { DebugInspectorOverlay } from '../components/DebugInspectorOverlay.tsx';
 import { KpiStrip } from '../components/KpiStrip.tsx';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer.tsx';
+import { copyToClipboard } from '@/utils/clipboard.ts';
+import type { AgentSessionAggregate } from '../../agents/types.ts';
 
 interface LimitGaugeProps {
   label: string;
@@ -124,6 +127,30 @@ function HelpOverlay() {
   );
 }
 
+function formatSessionSummary(session: AgentSessionAggregate): string {
+  const totalTokens = session.totals.input + session.totals.output;
+  const cost = session.totalCostUsd?.toFixed(4) ?? '0.00';
+  const primaryModel = session.streams[0]?.modelId ?? 'unknown';
+  const duration = Math.round((session.lastActivityAt - session.startedAt) / 1000);
+  const durationStr = duration > 3600 
+    ? `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m`
+    : duration > 60 
+      ? `${Math.floor(duration / 60)}m ${duration % 60}s`
+      : `${duration}s`;
+
+  return [
+    `Session: ${session.sessionId}`,
+    `Agent: ${session.agentName}`,
+    `Model: ${primaryModel}`,
+    `Status: ${session.status}`,
+    `Duration: ${durationStr}`,
+    `Tokens: ${totalTokens.toLocaleString()} (in: ${session.totals.input.toLocaleString()}, out: ${session.totals.output.toLocaleString()})`,
+    `Cost: $${cost}`,
+    `Requests: ${session.requestCount}`,
+    session.projectPath ? `Project: ${session.projectPath}` : null,
+  ].filter(Boolean).join('\n');
+}
+
 export function RealTimeDashboard() {
   const colors = useColors();
   const { providers } = usePlugins();
@@ -131,6 +158,7 @@ export function RealTimeDashboard() {
   const { sessions: agentSessions, isLoading, refreshSessions } = useAgentSessions();
   const { windowMs, cycleWindow, windowLabel } = useTimeWindow();
   const { height: terminalHeight } = useTerminalDimensions();
+  const { showToast } = useToastContext();
   
   const visibleRows = Math.max(1, terminalHeight - 29);
   
@@ -358,6 +386,23 @@ export function RealTimeDashboard() {
         setShowHelp(false);
         setShowDebugInspector(false);
         setShowSessionDrawer(false);
+        return;
+      }
+      
+      if (showSessionDrawer && processedSessions[selectedRow]) {
+        if (key.name === 'c') {
+          const summary = formatSessionSummary(processedSessions[selectedRow]);
+          copyToClipboard(summary).then(() => {
+            showToast('Copied to clipboard');
+          }).catch(() => {
+            showToast('Copy failed', 'error');
+          });
+          return;
+        }
+        if (key.name === 'x') {
+          showToast('Export not yet implemented', 'info');
+          return;
+        }
       }
       return;
     }
