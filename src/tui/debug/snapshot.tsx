@@ -48,6 +48,7 @@ import { StorageProvider } from '../contexts/StorageContext.tsx';
 import { InputProvider } from '../contexts/InputContext.tsx';
 import { PluginProvider } from '../contexts/PluginContext.tsx';
 import { ToastProvider } from '../contexts/ToastContext.tsx';
+import { ConfigProvider } from '../contexts/ConfigContext.tsx';
 
 function createMockDebugInspectorProps(): DebugInspectorProps {
   const now = Date.now();
@@ -382,9 +383,11 @@ const COMPONENT_REGISTRY: Record<string, ComponentEntry> = {
     defaultWidth: 80,
     defaultHeight: 25,
     render: () => (
-      <ToastProvider>
-        <SettingsView />
-      </ToastProvider>
+      <ConfigProvider>
+        <ToastProvider>
+          <SettingsView />
+        </ToastProvider>
+      </ConfigProvider>
     ),
   },
 };

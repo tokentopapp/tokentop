@@ -7,6 +7,7 @@ import { useInputFocus } from '../contexts/InputContext.tsx';
 import { useAgentSessions } from '../contexts/AgentSessionContext.tsx';
 import { useTimeWindow } from '../contexts/TimeWindowContext.tsx';
 import { useToastContext } from '../contexts/ToastContext.tsx';
+import { useConfig } from '../contexts/ConfigContext.tsx';
 import { DebugInspectorOverlay } from '../components/DebugInspectorOverlay.tsx';
 import { KpiStrip } from '../components/KpiStrip.tsx';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer.tsx';
@@ -159,19 +160,18 @@ export function RealTimeDashboard() {
   const { windowMs, cycleWindow, windowLabel } = useTimeWindow();
   const { height: terminalHeight } = useTerminalDimensions();
   const { showToast } = useToastContext();
+  const { config } = useConfig();
   
   const visibleRows = Math.max(1, terminalHeight - 29);
   
-  // Sparkline data for activity visualization
   const [sparkData, setSparkData] = useState<number[]>([]);
   
-  // UI State
   const [showHelp, setShowHelp] = useState(false);
   const [showDebugInspector, setShowDebugInspector] = useState(false);
   const [showSessionDrawer, setShowSessionDrawer] = useState(false);
   const [selectedRow, setSelectedRow] = useState(0);
   const [focusedPanel, setFocusedPanel] = useState<'sessions' | 'sidebar'>('sessions');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(config.display.sidebarCollapsed);
   const [filterQuery, setFilterQuery] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [sortField, setSortField] = useState<'cost' | 'tokens' | 'time'>('cost');

@@ -1,43 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useKeyboard } from '@opentui/react';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { useColors } from '../contexts/ThemeContext.tsx';
-
 import { useToastContext } from '../contexts/ToastContext.tsx';
-import { PATHS } from '@/storage/paths.ts';
-
-interface AppConfig {
-  configVersion: number;
-  refresh: {
-    intervalMs: number;
-    pauseAutoRefresh: boolean;
-  };
-  display: {
-    defaultTimeWindow: '5m' | '15m' | '1h' | '4h' | 'all';
-    sidebarCollapsed: boolean;
-    compactMode: boolean;
-  };
-  notifications: {
-    toastsEnabled: boolean;
-  };
-}
-
-const DEFAULT_CONFIG: AppConfig = {
-  configVersion: 1,
-  refresh: {
-    intervalMs: 60000,
-    pauseAutoRefresh: false,
-  },
-  display: {
-    defaultTimeWindow: '5m',
-    sidebarCollapsed: false,
-    compactMode: false,
-  },
-  notifications: {
-    toastsEnabled: true,
-  },
-};
+import { useConfig } from '../contexts/ConfigContext.tsx';
+import { type AppConfig } from '@/config/schema.ts';
 
 type SettingCategory = 'refresh' | 'display' | 'notifications';
 
@@ -47,9 +13,6 @@ interface SettingItem {
   category: SettingCategory;
   type: 'toggle' | 'select' | 'number';
   options?: string[];
-  min?: number;
-  max?: number;
-  step?: number;
   getValue: (config: AppConfig) => string | number | boolean;
   setValue: (config: AppConfig, value: string | number | boolean) => AppConfig;
 }
@@ -86,7 +49,7 @@ const SETTINGS: SettingItem[] = [
     label: 'Default Time Window',
     category: 'display',
     type: 'select',
-    options: ['5m', '15m', '1h', '4h', 'all'],
+    options: ['5m', '15m', '1h', '24h', '7d', '30d', 'all'],
     getValue: (c) => c.display.defaultTimeWindow,
     setValue: (c, v) => ({ ...c, display: { ...c.display, defaultTimeWindow: v as AppConfig['display']['defaultTimeWindow'] } }),
   },
@@ -122,76 +85,30 @@ const CATEGORIES: { id: SettingCategory; label: string }[] = [
   { id: 'notifications', label: 'Notifications' },
 ];
 
-function deepMerge(target: AppConfig, source: Partial<AppConfig>): AppConfig {
-  return {
-    configVersion: source.configVersion ?? target.configVersion,
-    refresh: {
-      ...target.refresh,
-      ...(source.refresh ?? {}),
-    },
-    display: {
-      ...target.display,
-      ...(source.display ?? {}),
-    },
-    notifications: {
-      ...target.notifications,
-      ...(source.notifications ?? {}),
-    },
-  };
-}
-
-async function loadConfig(): Promise<AppConfig> {
-  try {
-    const content = await fs.readFile(PATHS.config.file, 'utf-8');
-    const loaded = JSON.parse(content) as Partial<AppConfig>;
-    return deepMerge(DEFAULT_CONFIG, loaded);
-  } catch {
-    return DEFAULT_CONFIG;
-  }
-}
-
-async function saveConfig(config: AppConfig): Promise<void> {
-  await fs.mkdir(path.dirname(PATHS.config.file), { recursive: true });
-  const tempFile = PATHS.config.file + '.tmp';
-  await fs.writeFile(tempFile, JSON.stringify(config, null, 2), 'utf-8');
-  await fs.rename(tempFile, PATHS.config.file);
-}
-
 export function SettingsView() {
   const colors = useColors();
   const { showToast } = useToastContext();
+  const { config, isLoading, updateConfig, resetToDefaults, saveNow } = useConfig();
   
-  const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [selectedCategory, setSelectedCategory] = useState<SettingCategory>('refresh');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [focusedPane, setFocusedPane] = useState<'categories' | 'settings'>('settings');
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  useEffect(() => {
-    loadConfig().then((loaded) => {
-      setConfig(loaded);
-      setIsLoading(false);
-    });
-  }, []);
   
   const categorySettings = SETTINGS.filter(s => s.category === selectedCategory);
   
   const handleSave = useCallback(async () => {
     try {
-      await saveConfig(config);
-      setHasUnsavedChanges(false);
+      await saveNow();
       showToast('Settings saved');
     } catch {
       showToast('Failed to save settings', 'error');
     }
-  }, [config, showToast]);
+  }, [saveNow, showToast]);
   
   const handleReset = useCallback(() => {
-    setConfig(DEFAULT_CONFIG);
-    setHasUnsavedChanges(true);
+    resetToDefaults();
     showToast('Reset to defaults');
-  }, [showToast]);
+  }, [resetToDefaults, showToast]);
   
   const toggleCurrentSetting = useCallback(() => {
     const setting = categorySettings[selectedIndex];
@@ -210,9 +127,8 @@ export function SettingsView() {
       return;
     }
     
-    setConfig(newConfig);
-    setHasUnsavedChanges(true);
-  }, [categorySettings, selectedIndex, config]);
+    updateConfig(newConfig);
+  }, [categorySettings, selectedIndex, config, updateConfig]);
   
   useKeyboard((key) => {
     if (key.ctrl && key.name === 's') {
@@ -257,8 +173,7 @@ export function SettingsView() {
           const currentValue = setting.getValue(config) as string;
           const currentIdx = setting.options.indexOf(currentValue);
           const prevIdx = (currentIdx - 1 + setting.options.length) % setting.options.length;
-          setConfig(setting.setValue(config, setting.options[prevIdx]!));
-          setHasUnsavedChanges(true);
+          updateConfig(setting.setValue(config, setting.options[prevIdx]!));
         }
       } else if (key.name === 'right' || key.name === 'l') {
         const setting = categorySettings[selectedIndex];
@@ -266,8 +181,7 @@ export function SettingsView() {
           const currentValue = setting.getValue(config) as string;
           const currentIdx = setting.options.indexOf(currentValue);
           const nextIdx = (currentIdx + 1) % setting.options.length;
-          setConfig(setting.setValue(config, setting.options[nextIdx]!));
-          setHasUnsavedChanges(true);
+          updateConfig(setting.setValue(config, setting.options[nextIdx]!));
         }
       }
     }
@@ -283,12 +197,6 @@ export function SettingsView() {
   
   return (
     <box flexDirection="column" flexGrow={1} padding={1} gap={1}>
-      {hasUnsavedChanges && (
-        <box height={1} justifyContent="center">
-          <text fg={colors.warning}>● Unsaved changes - Press Ctrl+S to save</text>
-        </box>
-      )}
-      
       <box flexDirection="row" gap={1} flexGrow={1}>
         <box 
           flexDirection="column" 

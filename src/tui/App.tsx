@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRenderer, useKeyboard } from '@opentui/react';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -11,6 +11,7 @@ import { InputProvider, useInputFocus } from './contexts/InputContext.tsx';
 import { AgentSessionProvider } from './contexts/AgentSessionContext.tsx';
 import { StorageProvider } from './contexts/StorageContext.tsx';
 import { TimeWindowProvider } from './contexts/TimeWindowContext.tsx';
+import { ConfigProvider, useConfig } from './contexts/ConfigContext.tsx';
 import { Header } from './components/Header.tsx';
 import { StatusBar } from './components/StatusBar.tsx';
 import { DebugConsole, copyLogsToClipboard, type DebugConsoleHandle } from './components/DebugConsole.tsx';
@@ -21,67 +22,84 @@ import { Dashboard } from './views/Dashboard.tsx';
 import { HistoricalTrendsView } from './views/HistoricalTrendsView.tsx';
 import { ProjectsView } from './views/ProjectsView.tsx';
 import { SettingsView } from './views/SettingsView.tsx';
+import { CommandPalette, type CommandAction } from './components/CommandPalette.tsx';
 import { copyToClipboard } from '@/utils/clipboard.ts';
 import type { ThemePlugin } from '@/plugins/types/theme.ts';
 
 interface AppProps {
   initialTheme?: ThemePlugin;
-  refreshInterval?: number;
   debug?: boolean;
 }
 
 type View = 'dashboard' | 'providers' | 'trends' | 'projects' | 'settings';
 
-function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
+function AppContent() {
   const renderer = useRenderer();
   const colors = useColors();
   const { refreshAllProviders, isInitialized } = usePlugins();
   const { logs, isConsoleOpen, toggleConsole, closeConsole, clearLogs, exportLogs, info } = useLogs();
   const { toast, showToast, dismissToast } = useToastContext();
   const { isInputFocused } = useInputFocus();
+  const { config } = useConfig();
+  
+  const refreshInterval = config.refresh.pauseAutoRefresh ? 0 : config.refresh.intervalMs;
+  
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [consoleFollow, setConsoleFollow] = useState(true);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const debugConsoleRef = useRef<DebugConsoleHandle>(null);
   const lastKeyRef = useRef<string | null>(null);
   const burstRecorderRef = useRef<BurstRecorder | null>(null);
 
   const handleCopyLogs = useCallback(async () => {
     await copyLogsToClipboard(logs);
-    showToast('Copied to clipboard');
-  }, [logs, showToast]);
+    if (config.notifications.toastsEnabled) {
+      showToast('Copied to clipboard');
+    }
+  }, [logs, showToast, config.notifications.toastsEnabled]);
 
   const handleCaptureFrame = useCallback(async () => {
     try {
       const result = await captureFrameToFile(renderer, 'manual');
       info(`Frame captured: ${result.framePath}`);
-      showToast('Frame captured');
+      if (config.notifications.toastsEnabled) {
+        showToast('Frame captured');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       info(`Frame capture failed: ${msg}`);
-      showToast('Capture failed', 'error');
+      if (config.notifications.toastsEnabled) {
+        showToast('Capture failed', 'error');
+      }
     }
-  }, [renderer, info, showToast]);
+  }, [renderer, info, showToast, config.notifications.toastsEnabled]);
 
   const handleBurstRecord = useCallback(async () => {
     if (burstRecorderRef.current?.recording) {
       const frames = burstRecorderRef.current.stop();
       info(`Burst stopped: ${frames.length} frames captured`);
-      showToast(`Burst: ${frames.length} frames`);
+      if (config.notifications.toastsEnabled) {
+        showToast(`Burst: ${frames.length} frames`);
+      }
       burstRecorderRef.current = null;
       return;
     }
 
     burstRecorderRef.current = createBurstRecorder(renderer, { frameCount: 10, minInterval: 200 });
     info('Burst recording started (10 frames)');
-    showToast('Recording burst...');
+    if (config.notifications.toastsEnabled) {
+      showToast('Recording burst...');
+    }
     
     const frames = await burstRecorderRef.current.start();
     info(`Burst complete: ${frames.length} frames in ${frames[0]?.framePath.split('/').slice(0, -1).join('/')}`);
-    showToast(`Burst: ${frames.length} frames`);
+    if (config.notifications.toastsEnabled) {
+      showToast(`Burst: ${frames.length} frames`);
+    }
     burstRecorderRef.current = null;
-  }, [renderer, info, showToast]);
+  }, [renderer, info, showToast, config.notifications.toastsEnabled]);
 
   const handleMouseUp = useCallback(async () => {
     const selection = renderer.getSelection();
@@ -89,15 +107,40 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
     if (text && text.length > 0) {
       try {
         await copyToClipboard(text);
-        showToast('Copied to clipboard');
+        if (config.notifications.toastsEnabled) {
+          showToast('Copied to clipboard');
+        }
       } catch {
-        showToast('Copy failed', 'error');
+        if (config.notifications.toastsEnabled) {
+          showToast('Copy failed', 'error');
+        }
       }
       renderer.clearSelection();
     }
-  }, [renderer, showToast]);
+  }, [renderer, showToast, config.notifications.toastsEnabled]);
+
+  const commands: CommandAction[] = useMemo(() => [
+    { id: 'view-dashboard', label: 'Go to Dashboard', shortcut: '1', action: () => setActiveView('dashboard') },
+    { id: 'view-providers', label: 'Go to Providers', shortcut: '2', action: () => setActiveView('providers') },
+    { id: 'view-trends', label: 'Go to Trends', shortcut: '3', action: () => setActiveView('trends') },
+    { id: 'view-projects', label: 'Go to Projects', shortcut: '4', action: () => setActiveView('projects') },
+    { id: 'view-settings', label: 'Go to Settings', shortcut: '5', action: () => setActiveView('settings') },
+    { id: 'refresh', label: 'Refresh Data', shortcut: 'r', action: () => {
+      if (isInitialized) {
+        info('Manual refresh triggered');
+        refreshAllProviders().then(() => setLastRefresh(Date.now()));
+      }
+    }},
+    { id: 'toggle-debug', label: 'Toggle Debug Console', shortcut: '~', action: () => toggleConsole() },
+    { id: 'capture-frame', label: 'Capture Frame', shortcut: 'Ctrl+P', action: () => handleCaptureFrame() },
+    { id: 'quit', label: 'Quit', shortcut: 'q', action: () => renderer.destroy() },
+  ], [isInitialized, refreshAllProviders, info, toggleConsole, handleCaptureFrame, renderer]);
 
   useKeyboard((key) => {
+    if (showCommandPalette) {
+      return;
+    }
+    
     if (isConsoleOpen) {
       if (key.name === 'escape' || key.sequence === '~') {
         closeConsole();
@@ -125,7 +168,6 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
         lastKeyRef.current = null;
         return;
       }
-      // Vim: G = bottom, gg = top
       if (key.shift && key.name === 'g') {
         debugConsoleRef.current?.scrollToBottom();
         lastKeyRef.current = null;
@@ -163,6 +205,11 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
     if (key.name === '5') {
       setActiveView('settings');
     }
+    
+    if (key.sequence === ':' || (key.shift && key.name === ';')) {
+      setShowCommandPalette(true);
+      return;
+    }
 
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) {
       renderer.destroy();
@@ -174,11 +221,9 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
     if (key.sequence === '~') {
       toggleConsole();
     }
-    // Ctrl+P: Capture single frame
     if (key.ctrl && key.name === 'p') {
       handleCaptureFrame();
     }
-    // Ctrl+Shift+P: Toggle burst recording
     if (key.ctrl && key.shift && key.name === 'p') {
       handleBurstRecord();
     }
@@ -257,18 +302,45 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
         {...(statusMessage ? { message: statusMessage } : {})}
       />
 
-      {toast && (
+      {toast && config.notifications.toastsEnabled && (
         <Toast
           message={toast.message}
           type={toast.type}
           onDismiss={dismissToast}
         />
       )}
+
+      {showCommandPalette && (
+        <CommandPalette
+          commands={commands}
+          onClose={() => setShowCommandPalette(false)}
+        />
+      )}
     </box>
   );
 }
 
-export function App({ initialTheme, refreshInterval = 60000, debug = false }: AppProps) {
+function ConfiguredApp() {
+  const { config, isLoading } = useConfig();
+  
+  if (isLoading) {
+    return null;
+  }
+  
+  return (
+    <TimeWindowProvider defaultWindow={config.display.defaultTimeWindow}>
+      <ToastProvider>
+        <PluginProvider>
+          <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
+            <AppContent />
+          </AgentSessionProvider>
+        </PluginProvider>
+      </ToastProvider>
+    </TimeWindowProvider>
+  );
+}
+
+export function App({ initialTheme, debug = false }: AppProps) {
   const themeProviderProps = initialTheme ? { initialTheme } : {};
 
   return (
@@ -276,15 +348,9 @@ export function App({ initialTheme, refreshInterval = 60000, debug = false }: Ap
       <InputProvider>
         <StorageProvider>
           <ThemeProvider {...themeProviderProps}>
-            <TimeWindowProvider defaultWindow="5m">
-              <ToastProvider>
-                <PluginProvider>
-                  <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
-                    <AppContent refreshInterval={refreshInterval} />
-                  </AgentSessionProvider>
-                </PluginProvider>
-              </ToastProvider>
-            </TimeWindowProvider>
+            <ConfigProvider>
+              <ConfiguredApp />
+            </ConfigProvider>
           </ThemeProvider>
         </StorageProvider>
       </InputProvider>
