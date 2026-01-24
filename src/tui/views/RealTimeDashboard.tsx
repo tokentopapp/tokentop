@@ -5,40 +5,7 @@ import { usePlugins } from '../contexts/PluginContext.tsx';
 import { useInputFocus } from '../contexts/InputContext.tsx';
 import { useAgentSessions } from '../contexts/AgentSessionContext.tsx';
 import { DebugInspectorOverlay } from '../components/DebugInspectorOverlay.tsx';
-
-function Sparkline({ data, width = 60, label }: { data: number[], width?: number, label?: string }) {
-  const colors = useColors();
-  const chars = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-  
-  const max = Math.max(...data, 1);
-  const normalized = data.map(v => Math.min(8, Math.floor((v / max) * 8)));
-  
-  const displayData = normalized.slice(-width);
-  const padding = width - displayData.length;
-  
-  const groups: { color: string; chars: string }[] = [];
-  for (const v of displayData) {
-    const color = v > 6 ? colors.error : v > 3 ? colors.warning : colors.success;
-    const char = chars[v] ?? ' ';
-    if (groups.length > 0 && groups[groups.length - 1]!.color === color) {
-      groups[groups.length - 1]!.chars += char;
-    } else {
-      groups.push({ color, chars: char });
-    }
-  }
-  
-  return (
-    <box flexDirection="column">
-      <text>
-        {padding > 0 && <span>{' '.repeat(padding)}</span>}
-        {groups.map((group, i) => (
-          <span key={i} fg={group.color}>{group.chars}</span>
-        ))}
-      </text>
-      {label && <text fg={colors.textMuted}>{label}</text>}
-    </box>
-  );
-}
+import { KpiStrip } from '../components/KpiStrip.tsx';
 
 function LimitGauge({ 
   label, 
@@ -94,23 +61,6 @@ function LimitGauge({
     </box>
   );
 }
-
-const KPICard = ({ title, value, delta, subValue, highlight = false }: any) => {
-  const colors = useColors();
-  return (
-    <box 
-      flexDirection="column" 
-      paddingLeft={1}
-      paddingRight={2}
-      flexGrow={1}
-    >
-      <text fg={colors.textMuted}>{title}</text>
-      <text fg={highlight ? colors.primary : colors.text}><strong>{value}</strong></text>
-      {delta && <text fg={colors.success}>{delta}</text>}
-      {subValue && <text fg={colors.textMuted}>{subValue}</text>}
-    </box>
-  );
-};
 
 function HelpOverlay() {
   const colors = useColors();
@@ -172,9 +122,8 @@ export function RealTimeDashboard() {
   const [sortField, setSortField] = useState<'cost' | 'tokens' | 'time'>('cost');
   
   const historyRef = useRef<{time: number, cost: number, tokens: number}[]>([]);
-  const [deltas, setDeltas] = useState({ cost: 0, tokens: 0 });
+  const [deltas, setDeltas] = useState({ cost: 0, tokens: 0, windowSec: 0 });
   
-  // Use -1 as sentinel to detect first load and avoid false spike
   const emaRef = useRef<{ lastTokens: number; lastTime: number; ema: number }>({ 
     lastTokens: -1, lastTime: Date.now(), ema: 0 
   });
@@ -221,34 +170,41 @@ export function RealTimeDashboard() {
 
   const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
   const formatTokens = (val: number) => val > 1000000 ? `${(val/1000000).toFixed(1)}M` : `${(val/1000).toFixed(1)}K`;
-  const formatRate = (val: number) => val >= 1000 ? `${(val/1000).toFixed(1)}k` : `${Math.round(val)}`;
-  
-  const getActivityStatus = () => {
-    const { ema, isSpike } = activity;
-    if (isSpike || ema >= 2000) return { label: 'SPIKE', color: colors.error };
-    if (ema >= 800) return { label: 'HOT', color: colors.warning };
-    if (ema >= 200) return { label: 'BUSY', color: colors.success };
-    if (ema >= 50) return { label: 'LOW', color: colors.textMuted };
-    return { label: 'IDLE', color: colors.textSubtle };
-  };
 
   useEffect(() => {
     setSparkData(Array.from({ length: 60 }, () => 0));
   }, []);
 
   useEffect(() => {
+    if (isLoading || agentSessions.length === 0) return;
+    
     const totalCost = agentSessions.reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0);
     const totalTokens = agentSessions.reduce((sum, s) => sum + s.totals.input + s.totals.output, 0);
-    
     const currentTime = Date.now();
+    
+    const lastEntry = historyRef.current[historyRef.current.length - 1];
+    if (lastEntry && totalTokens < lastEntry.tokens) {
+      historyRef.current = [];
+    }
+    
     historyRef.current.push({ time: currentTime, cost: totalCost, tokens: totalTokens });
     if (historyRef.current.length > 300) historyRef.current.shift();
 
-    const fiveMinAgo = historyRef.current[0];
-    if (fiveMinAgo) {
+    const targetTime = currentTime - 5 * 60 * 1000;
+    let baseline = historyRef.current[0];
+    for (let i = historyRef.current.length - 1; i >= 0; i--) {
+      if (historyRef.current[i]!.time <= targetTime) {
+        baseline = historyRef.current[i];
+        break;
+      }
+    }
+    
+    if (baseline) {
+      const windowSec = (currentTime - baseline.time) / 1000;
       setDeltas({
-        cost: totalCost - fiveMinAgo.cost,
-        tokens: totalTokens - fiveMinAgo.tokens
+        cost: totalCost - baseline.cost,
+        tokens: totalTokens - baseline.tokens,
+        windowSec,
       });
     }
 
@@ -262,15 +218,17 @@ export function RealTimeDashboard() {
 
     const prevTokens = emaRef.current.lastTokens;
     const deltaTokens = Math.max(0, totalTokens - prevTokens);
-    const dt = (currentTime - emaRef.current.lastTime) / 1000;
+    const dtRaw = (currentTime - emaRef.current.lastTime) / 1000;
+    const dt = Math.max(dtRaw, 0.25);
     
     debugDataRef.current.lastDeltaTokens = deltaTokens;
     debugDataRef.current.lastDt = dt;
     
     if (deltaTokens > 0) {
-      const rateTps = dt > 0 ? deltaTokens / dt : 0;
-      const alpha = 2 / (10 + 1);
-      const newEma = alpha * rateTps + (1 - alpha) * emaRef.current.ema;
+      const rateTps = deltaTokens / dt;
+      const tauSec = 10;
+      const alpha = 1 - Math.exp(-dt / tauSec);
+      const newEma = emaRef.current.ema + alpha * (rateTps - emaRef.current.ema);
       const isSpike = rateTps >= Math.max(800, newEma * 2) && (rateTps - newEma) >= 200;
       
       debugDataRef.current.lastRateTps = rateTps;
@@ -280,7 +238,7 @@ export function RealTimeDashboard() {
     
     emaRef.current.lastTokens = totalTokens;
     emaRef.current.lastTime = currentTime;
-  }, [agentSessions]);
+  }, [agentSessions, isLoading]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -289,7 +247,7 @@ export function RealTimeDashboard() {
       emaRef.current.ema = decayedEma;
       
       setActivity(prev => ({ ...prev, ema: decayedEma, isSpike: false }));
-      setSparkData(d => [...d.slice(1), Math.min(100, Math.round(decayedEma / 10))]);
+      setSparkData(d => [...d.slice(1), decayedEma]);
     }, 1000);
 
     return () => clearInterval(interval);
@@ -431,39 +389,17 @@ export function RealTimeDashboard() {
         />
       )}
       
-      <box flexDirection="row" gap={0} height={4} flexShrink={0}>
-        <KPICard 
-          title="COST" 
-          value={formatCurrency(totalCost)} 
-          delta={`+${formatCurrency(deltas.cost)} (5m)`} 
-          highlight={true}
-        />
-        <KPICard 
-          title="TOKENS" 
-          value={formatTokens(totalTokens)} 
-          delta={`+${formatTokens(deltas.tokens)} (5m)`}
-        />
-        <KPICard 
-          title="REQUESTS" 
-          value={totalRequests.toLocaleString()} 
-          subValue={`${activeCount} active`}
-        />
-        
-        <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1}>
-          <box flexDirection="row" justifyContent="space-between">
-            <text fg={colors.textMuted}>ACTIVITY</text>
-            <text>
-              <span fg={getActivityStatus().color}>{getActivityStatus().label}</span>
-              <span fg={colors.textMuted}> {formatRate(activity.ema)}/s</span>
-            </text>
-          </box>
-          <Sparkline data={sparkData} width={50} label="tokens/s (60s)" />
-        </box>
-      </box>
-      
-      <box height={1} overflow="hidden">
-        <text fg={colors.border}>{'─'.repeat(300)}</text>
-      </box>
+      <KpiStrip
+        totalCost={totalCost}
+        totalTokens={totalTokens}
+        totalRequests={totalRequests}
+        activeCount={activeCount}
+        deltaCost={deltas.cost}
+        deltaTokens={deltas.tokens}
+        windowSec={deltas.windowSec}
+        activity={activity}
+        sparkData={sparkData}
+      />
 
       <box flexDirection="column" border borderStyle="single" padding={1} borderColor={colors.border} overflow="hidden" height={5} flexShrink={0}>
         <text fg={colors.textMuted} marginBottom={0}>PROVIDER LIMITS</text>

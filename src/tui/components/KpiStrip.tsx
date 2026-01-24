@@ -1,4 +1,5 @@
 import { useColors } from '../contexts/ThemeContext.tsx';
+import { Sparkline } from './Sparkline.tsx';
 
 interface KPICardProps {
   title: string;
@@ -25,46 +26,6 @@ function KPICard({ title, value, delta, subValue, highlight = false }: KPICardPr
   );
 }
 
-interface SparklineProps {
-  data: number[];
-  width?: number;
-  label?: string;
-}
-
-function Sparkline({ data, width = 60, label }: SparklineProps) {
-  const colors = useColors();
-  const chars = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-  
-  const max = Math.max(...data, 1);
-  const normalized = data.map(v => Math.min(8, Math.floor((v / max) * 8)));
-  
-  const displayData = normalized.slice(-width);
-  const padding = width - displayData.length;
-  
-  const groups: { color: string; chars: string }[] = [];
-  for (const v of displayData) {
-    const color = v > 6 ? colors.error : v > 3 ? colors.warning : colors.success;
-    const char = chars[v] ?? ' ';
-    if (groups.length > 0 && groups[groups.length - 1]!.color === color) {
-      groups[groups.length - 1]!.chars += char;
-    } else {
-      groups.push({ color, chars: char });
-    }
-  }
-  
-  return (
-    <box flexDirection="column">
-      <text>
-        {padding > 0 && <span>{' '.repeat(padding)}</span>}
-        {groups.map((group, i) => (
-          <span key={i} fg={group.color}>{group.chars}</span>
-        ))}
-      </text>
-      {label && <text fg={colors.textMuted}>{label}</text>}
-    </box>
-  );
-}
-
 export interface ActivityStatus {
   label: string;
   color: string;
@@ -77,6 +38,7 @@ export interface KpiStripProps {
   activeCount: number;
   deltaCost: number;
   deltaTokens: number;
+  windowSec: number;
   activity: { rate: number; ema: number; isSpike: boolean };
   sparkData: number[];
 }
@@ -88,6 +50,7 @@ export function KpiStrip({
   activeCount,
   deltaCost,
   deltaTokens,
+  windowSec,
   activity,
   sparkData,
 }: KpiStripProps) {
@@ -96,6 +59,18 @@ export function KpiStrip({
   const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
   const formatTokens = (val: number) => val > 1000000 ? `${(val/1000000).toFixed(1)}M` : `${(val/1000).toFixed(1)}K`;
   const formatRate = (val: number) => val >= 1000 ? `${(val/1000).toFixed(1)}k` : `${Math.round(val)}`;
+  const formatBurnTokens = (val: number) => val >= 1000 ? `${(val/1000).toFixed(1)}k` : `${Math.round(val)}`;
+  
+  const formatWindowLabel = (sec: number): string => {
+    if (sec < 60) return `${Math.round(sec)}s`;
+    if (sec < 3600) return `${Math.round(sec / 60)}m`;
+    return `${(sec / 3600).toFixed(1)}h`;
+  };
+  
+  const hasEnoughHistory = windowSec >= 30;
+  const burnRateCostPerHour = hasEnoughHistory ? deltaCost * (3600 / windowSec) : 0;
+  const burnRateTokensPerMin = hasEnoughHistory ? deltaTokens * (60 / windowSec) : 0;
+  const windowLabel = formatWindowLabel(windowSec);
   
   const getActivityStatus = (): ActivityStatus => {
     const { ema, isSpike } = activity;
@@ -114,18 +89,23 @@ export function KpiStrip({
         <KPICard 
           title="COST" 
           value={formatCurrency(totalCost)} 
-          delta={`+${formatCurrency(deltaCost)} (5m)`} 
+          delta={hasEnoughHistory ? `+${formatCurrency(deltaCost)} (${windowLabel})` : 'gathering...'} 
           highlight={true}
         />
         <KPICard 
           title="TOKENS" 
           value={formatTokens(totalTokens)} 
-          delta={`+${formatTokens(deltaTokens)} (5m)`}
+          delta={hasEnoughHistory ? `+${formatTokens(deltaTokens)} (${windowLabel})` : 'gathering...'}
         />
         <KPICard 
           title="REQUESTS" 
           value={totalRequests.toLocaleString()} 
           subValue={`${activeCount} active`}
+        />
+        <KPICard 
+          title="BURN RATE" 
+          value={hasEnoughHistory ? `${formatCurrency(burnRateCostPerHour)}/hr` : '--'}
+          subValue={hasEnoughHistory ? `${formatBurnTokens(burnRateTokensPerMin)} tok/min` : 'gathering...'}
         />
         
         <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1}>
@@ -136,7 +116,7 @@ export function KpiStrip({
               <span fg={colors.textMuted}> {formatRate(activity.ema)}/s</span>
             </text>
           </box>
-          <Sparkline data={sparkData} width={50} label="tokens/s (60s)" />
+          <Sparkline data={sparkData} width={50} label="tok/s" fixedMax={2000} />
         </box>
       </box>
       
