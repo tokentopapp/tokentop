@@ -20,6 +20,7 @@ import { RealTimeDashboard } from './views/RealTimeDashboard.tsx';
 import { Dashboard } from './views/Dashboard.tsx';
 import { HistoricalTrendsView } from './views/HistoricalTrendsView.tsx';
 import { ProjectsView } from './views/ProjectsView.tsx';
+import { SettingsView } from './views/SettingsView.tsx';
 import { copyToClipboard } from '@/utils/clipboard.ts';
 import type { ThemePlugin } from '@/plugins/types/theme.ts';
 
@@ -29,7 +30,7 @@ interface AppProps {
   debug?: boolean;
 }
 
-type View = 'dashboard' | 'providers' | 'trends' | 'projects';
+type View = 'dashboard' | 'providers' | 'trends' | 'projects' | 'settings';
 
 function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
   const renderer = useRenderer();
@@ -159,6 +160,9 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
     if (key.name === '4') {
       setActiveView('projects');
     }
+    if (key.name === '5') {
+      setActiveView('settings');
+    }
 
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) {
       renderer.destroy();
@@ -241,6 +245,8 @@ function AppContent({ refreshInterval = 60000 }: { refreshInterval?: number }) {
         <HistoricalTrendsView />
       ) : activeView === 'projects' ? (
         <ProjectsView />
+      ) : activeView === 'settings' ? (
+        <SettingsView />
       ) : (
         <RealTimeDashboard />
       )}

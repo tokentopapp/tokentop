@@ -37,11 +37,7 @@ export function UsageGauge({
   return (
     <box flexDirection="column" width={width}>
       <box flexDirection="row" justifyContent="space-between">
-        <text>
-          <span fg={providerColor}>
-            <strong>{label}</strong>
-          </span>
-        </text>
+        <text fg={colors.textSubtle}>{label}</text>
         <text fg={colors.textMuted}>
           {usedPercent !== null ? `${Math.round(percent)}%` : '--'}
         </text>

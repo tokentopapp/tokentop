@@ -4,7 +4,7 @@ import { useColors } from '../contexts/ThemeContext.tsx';
 interface HeaderProps {
   title?: string;
   subtitle?: string;
-  activeView?: 'dashboard' | 'providers' | 'trends' | 'projects';
+  activeView?: 'dashboard' | 'providers' | 'trends' | 'projects' | 'settings';
 }
 
 const ASCII_LOGO = [
@@ -26,6 +26,7 @@ export function Header({ title = 'tokentop', subtitle, activeView }: HeaderProps
   const isProviders = activeView === 'providers';
   const isTrends = activeView === 'trends';
   const isProjects = activeView === 'projects';
+  const isSettings = activeView === 'settings';
   const useLargeLogo = height >= MIN_HEIGHT_FOR_LARGE_LOGO;
 
   const headerHeight = useLargeLogo ? 7 : 1;
@@ -89,6 +90,13 @@ export function Header({ title = 'tokentop', subtitle, activeView }: HeaderProps
                 <span bg={colors.primary} fg={colors.background}><strong> PROJECTS </strong></span>
               ) : (
                 <span fg={colors.textMuted}> PROJECTS </span>
+              )}
+            </text>
+            <text height={1}>
+              {isSettings ? (
+                <span bg={colors.primary} fg={colors.background}><strong> SETTINGS </strong></span>
+              ) : (
+                <span fg={colors.textMuted}> SETTINGS </span>
               )}
             </text>
           </box>

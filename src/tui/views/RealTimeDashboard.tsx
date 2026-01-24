@@ -77,7 +77,7 @@ function LimitGauge({
     <box width={30} overflow="hidden">
       <text>
         <span fg={statusColor}>{statusIcon} </span>
-        <span fg={colors.text}>{displayLabel} </span>
+        <span fg={colors.textMuted}>{displayLabel} </span>
         <span fg={barColor}>{'█'.repeat(filled)}</span>
         <span fg={colors.textSubtle}>{'·'.repeat(empty)}</span>
         <span fg={isCritical ? colors.error : colors.textMuted}> {percentStr}</span>
@@ -608,9 +608,10 @@ export function RealTimeDashboard() {
                 const modelId = primaryStream?.modelId ?? 'unknown';
                 const providerColor = getProviderColor(providerId);
                 const projectPath = session.projectPath ?? '—';
-                const projectDisplay = projectPath.length > 20 
-                  ? '…' + projectPath.slice(-19) 
-                  : projectPath;
+                const repoName = projectPath === '—' 
+                  ? '—' 
+                  : projectPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? projectPath;
+                const projectDisplay = repoName.length > 20 ? repoName.slice(0, 19) + '…' : repoName;
 
                 return (
                   <box 
@@ -622,7 +623,7 @@ export function RealTimeDashboard() {
                     {...(isSelected ? { backgroundColor: colors.primary } : {})}
                   >
                     <text width={8} height={1} fg={isSelected ? rowFg : colors.textMuted}>{session.sessionId.slice(0, 7)}</text>
-                    <text width={12} height={1} fg={isSelected ? rowFg : colors.text}>{session.agentName}</text>
+                    <text width={12} height={1} fg={isSelected ? rowFg : colors.textSubtle}>{session.agentName}</text>
                     <text width={16} height={1} fg={isSelected ? rowFg : providerColor}>{modelId.split('/').pop()?.slice(0,15)}</text>
                     <text width={8} height={1} fg={isSelected ? rowFg : colors.text}>{formatTokens(session.totals.input + session.totals.output).padStart(7)}</text>
                     <text width={8} height={1} fg={isSelected ? rowFg : colors.success}>{formatCurrency(session.totalCostUsd ?? 0).padStart(7)}</text>
@@ -631,7 +632,7 @@ export function RealTimeDashboard() {
                       width={6} 
                       height={1} 
                       fg={isSelected 
-                        ? (session.status === 'active' ? '#ffffff' : rowFg)
+                        ? rowFg
                         : (session.status === 'active' ? colors.success : colors.textMuted)}
                     >
                       {session.status === 'active' ? '●' : '○'}

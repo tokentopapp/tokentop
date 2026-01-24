@@ -41,11 +41,13 @@ import { SkeletonText, SkeletonGauge, SkeletonProviderContent } from '../compone
 import { DebugConsole } from '../components/DebugConsole.tsx';
 import { HistoricalTrendsView } from '../views/HistoricalTrendsView.tsx';
 import { ProjectsView } from '../views/ProjectsView.tsx';
+import { SettingsView } from '../views/SettingsView.tsx';
 import { AgentSessionProvider } from '../contexts/AgentSessionContext.tsx';
 import { TimeWindowProvider } from '../contexts/TimeWindowContext.tsx';
 import { StorageProvider } from '../contexts/StorageContext.tsx';
 import { InputProvider } from '../contexts/InputContext.tsx';
 import { PluginProvider } from '../contexts/PluginContext.tsx';
+import { ToastProvider } from '../contexts/ToastContext.tsx';
 
 function createMockDebugInspectorProps(): DebugInspectorProps {
   const now = Date.now();
@@ -372,6 +374,17 @@ const COMPONENT_REGISTRY: Record<string, ComponentEntry> = {
           </TimeWindowProvider>
         </StorageProvider>
       </InputProvider>
+    ),
+  },
+  'settings-view': {
+    name: 'SettingsView',
+    description: 'Application settings with categories',
+    defaultWidth: 80,
+    defaultHeight: 25,
+    render: () => (
+      <ToastProvider>
+        <SettingsView />
+      </ToastProvider>
     ),
   },
 };

@@ -1,16 +1,32 @@
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { Sparkline } from './Sparkline.tsx';
 
+type MetricType = 'cost' | 'tokens' | 'requests' | 'rate' | 'default';
+
 interface KPICardProps {
   title: string;
   value: string;
   delta?: string;
   subValue?: string;
-  highlight?: boolean;
+  metric?: MetricType;
 }
 
-function KPICard({ title, value, delta, subValue, highlight = false }: KPICardProps) {
+function KPICard({ title, value, delta, subValue, metric = 'default' }: KPICardProps) {
   const colors = useColors();
+  
+  // Semantic color mapping per spec
+  const getMetricColor = (m: MetricType): string => {
+    switch (m) {
+      case 'cost': return colors.success;      // Green - money/budget
+      case 'tokens': return colors.primary;    // Cyan/Blue - primary metric
+      case 'requests': return colors.secondary; // Purple - secondary metric
+      case 'rate': return colors.warning;      // Yellow/Orange - burn rate
+      default: return colors.text;
+    }
+  };
+  
+  const valueColor = getMetricColor(metric);
+  
   return (
     <box 
       flexDirection="column" 
@@ -19,7 +35,7 @@ function KPICard({ title, value, delta, subValue, highlight = false }: KPICardPr
       flexGrow={1}
     >
       <text fg={colors.textMuted}>{title}</text>
-      <text fg={highlight ? colors.primary : colors.text}><strong>{value}</strong></text>
+      <text fg={valueColor}><strong>{value}</strong></text>
       {delta && <text fg={colors.success}>{delta}</text>}
       {subValue && <text fg={colors.textMuted}>{subValue}</text>}
     </box>
@@ -90,22 +106,25 @@ export function KpiStrip({
           title="COST" 
           value={formatCurrency(totalCost)} 
           delta={hasEnoughHistory ? `+${formatCurrency(deltaCost)} (${windowLabel})` : 'gathering...'} 
-          highlight={true}
+          metric="cost"
         />
         <KPICard 
           title="TOKENS" 
           value={formatTokens(totalTokens)} 
           delta={hasEnoughHistory ? `+${formatTokens(deltaTokens)} (${windowLabel})` : 'gathering...'}
+          metric="tokens"
         />
         <KPICard 
           title="REQUESTS" 
           value={totalRequests.toLocaleString()} 
           subValue={`${activeCount} active`}
+          metric="requests"
         />
         <KPICard 
           title="BURN RATE" 
           value={hasEnoughHistory ? `${formatCurrency(burnRateCostPerHour)}/hr` : '--'}
           subValue={hasEnoughHistory ? `${formatBurnTokens(burnRateTokensPerMin)} tok/min` : 'gathering...'}
+          metric="rate"
         />
         
         <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1}>
