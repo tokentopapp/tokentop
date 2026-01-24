@@ -494,14 +494,14 @@ export function RealTimeDashboard() {
             <text fg={colors.textMuted}>{processedSessions.length} sessions</text>
           </box>
           
-          <box flexDirection="row" paddingLeft={1} paddingRight={1}>
-            <text width={8} fg={colors.textSubtle}>PID</text>
-            <text width={12} fg={colors.textSubtle}>AGENT</text>
-            <text width={16} fg={colors.textSubtle}>MODEL</text>
-            <text width={8} fg={colors.textSubtle}>TOKENS</text>
-            <text width={8} fg={colors.textSubtle}>COST</text>
-            <text flexGrow={1} fg={colors.textSubtle} paddingLeft={2}>PROJECT</text>
-            <text width={6} fg={colors.textSubtle}>STATUS</text>
+          <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1}>
+            <text width={8} height={1} fg={colors.textSubtle}>PID     </text>
+            <text width={12} height={1} fg={colors.textSubtle}>AGENT       </text>
+            <text width={16} height={1} fg={colors.textSubtle}>MODEL           </text>
+            <text width={8} height={1} fg={colors.textSubtle}>TOKENS  </text>
+            <text width={8} height={1} fg={colors.textSubtle}>COST    </text>
+            <text flexGrow={1} height={1} fg={colors.textSubtle} paddingLeft={2}>PROJECT</text>
+            <text width={6} height={1} fg={colors.textSubtle}>STATUS</text>
           </box>
           
           <scrollbox flexGrow={1}>
@@ -529,15 +529,16 @@ export function RealTimeDashboard() {
                     flexDirection="row" 
                     paddingLeft={1} 
                     paddingRight={1}
+                    height={1}
                     {...(isSelected ? { backgroundColor: colors.primary } : {})}
                   >
-                    <text width={8} fg={isSelected ? rowFg : colors.textMuted}>{session.sessionId.slice(0, 7)}</text>
-                    <text width={12} fg={isSelected ? rowFg : colors.text}>{session.agentName}</text>
-                    <text width={16} fg={isSelected ? rowFg : providerColor}>{modelId.split('/').pop()?.slice(0,15)}</text>
-                    <text width={8} fg={isSelected ? rowFg : colors.text}>{formatTokens(session.totals.input + session.totals.output).padStart(7)}</text>
-                    <text width={8} fg={isSelected ? rowFg : colors.success}>{formatCurrency(session.totalCostUsd ?? 0).padStart(7)}</text>
-                    <text flexGrow={1} fg={isSelected ? rowFg : colors.textSubtle} paddingLeft={2}>{projectDisplay}</text>
-                    <text width={6} fg={isSelected ? rowFg : (session.status === 'active' ? colors.success : colors.textMuted)}>
+                    <text width={8} height={1} fg={isSelected ? rowFg : colors.textMuted}>{session.sessionId.slice(0, 7)}</text>
+                    <text width={12} height={1} fg={isSelected ? rowFg : colors.text}>{session.agentName}</text>
+                    <text width={16} height={1} fg={isSelected ? rowFg : providerColor}>{modelId.split('/').pop()?.slice(0,15)}</text>
+                    <text width={8} height={1} fg={isSelected ? rowFg : colors.text}>{formatTokens(session.totals.input + session.totals.output).padStart(7)}</text>
+                    <text width={8} height={1} fg={isSelected ? rowFg : colors.success}>{formatCurrency(session.totalCostUsd ?? 0).padStart(7)}</text>
+                    <text flexGrow={1} height={1} fg={isSelected ? rowFg : colors.textSubtle} paddingLeft={2}>{projectDisplay}</text>
+                    <text width={6} height={1} fg={isSelected ? rowFg : (session.status === 'active' ? colors.success : colors.textMuted)}>
                       {session.status === 'active' ? 'active' : 'idle'}
                     </text>
                   </box>
@@ -555,30 +556,31 @@ export function RealTimeDashboard() {
             border
             borderStyle={focusedPanel === 'sidebar' ? "double" : "single"}
             borderColor={focusedPanel === 'sidebar' ? colors.primary : colors.border}
+            overflow="hidden"
           >
-            <box flexDirection="column" padding={1} flexGrow={1}>
-              <text fg={colors.textSubtle} marginBottom={1}>MODEL BREAKDOWN</text>
+            <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
+              <text height={1} fg={colors.textSubtle} marginBottom={1}>MODEL BREAKDOWN</text>
               {modelStats.map(([modelId, cost]) => (
                 <box key={modelId} flexDirection="column" marginBottom={1}>
-                  <box flexDirection="row" justifyContent="space-between">
-                    <text fg={colors.text}>{modelId.length > 15 ? modelId.slice(0,14)+'…' : modelId}</text>
-                    <text fg={colors.textMuted}>{formatCurrency(cost)}</text>
+                  <box flexDirection="row" justifyContent="space-between" height={1}>
+                    <text height={1} fg={colors.text}>{(modelId.length > 15 ? modelId.slice(0,14)+'…' : modelId).padEnd(18)}</text>
+                    <text height={1} fg={colors.textMuted}>{formatCurrency(cost).padStart(7)}</text>
                   </box>
-                  <box flexDirection="row">
-                    <text fg={getProviderColor(modelId)}>
-                      {'█'.repeat(Math.ceil((cost / maxModelCost) * 20))}
+                  <box flexDirection="row" height={1}>
+                    <text height={1} fg={getProviderColor(modelId)}>
+                      {'█'.repeat(Math.ceil((cost / maxModelCost) * 20)).padEnd(20)}
                     </text>
                   </box>
                 </box>
               ))}
             </box>
 
-            <box flexDirection="column" padding={1} flexGrow={1}>
-               <text fg={colors.textSubtle} marginBottom={1}>BY PROVIDER</text>
+            <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
+               <text height={1} fg={colors.textSubtle} marginBottom={1}>BY PROVIDER</text>
                {providerStats.map(([provider, cost]) => (
-                 <box key={provider} flexDirection="row" justifyContent="space-between">
-                   <text fg={getProviderColor(provider)}>{provider}</text>
-                   <text fg={colors.text}>{formatCurrency(cost)}</text>
+                 <box key={provider} flexDirection="row" justifyContent="space-between" height={1}>
+                   <text height={1} fg={getProviderColor(provider)}>{provider.padEnd(18)}</text>
+                   <text height={1} fg={colors.text}>{formatCurrency(cost).padStart(7)}</text>
                  </box>
                ))}
             </box>
