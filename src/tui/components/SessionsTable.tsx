@@ -1,8 +1,8 @@
 import { useColors } from '../contexts/ThemeContext.tsx';
-import type { AggregatedSession } from '../../agents/aggregator.ts';
+import type { AgentSessionAggregate } from '../../agents/types.ts';
 
 interface SessionsTableProps {
-  sessions: AggregatedSession[];
+  sessions: AgentSessionAggregate[];
   selectedRow: number;
   isLoading: boolean;
   isFiltering: boolean;
