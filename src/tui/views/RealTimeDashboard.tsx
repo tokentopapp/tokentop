@@ -61,7 +61,7 @@ function LimitGauge({
         <text>
           <span fg={colors.textSubtle}> ○ </span>
           <span fg={colors.textSubtle}>{ghostLabel} </span>
-          <span fg={colors.textSubtle}>{'░'.repeat(barWidth)}</span>
+          <span fg={colors.textSubtle}>{'·'.repeat(barWidth)}</span>
           <span fg={colors.textSubtle}> N/A</span>
         </text>
       </box>
@@ -88,7 +88,7 @@ function LimitGauge({
         <span fg={statusColor}>{statusIcon} </span>
         <span fg={colors.text}>{displayLabel} </span>
         <span fg={barColor}>{'█'.repeat(filled)}</span>
-        <span fg={colors.textSubtle}>{'░'.repeat(empty)}</span>
+        <span fg={colors.textSubtle}>{'·'.repeat(empty)}</span>
         <span fg={isCritical ? colors.error : colors.textMuted}> {percentStr}</span>
       </text>
     </box>
@@ -101,15 +101,12 @@ const KPICard = ({ title, value, delta, subValue, highlight = false }: any) => {
     <box 
       flexDirection="column" 
       paddingLeft={1}
-      paddingRight={1}
-      border 
-      borderStyle={highlight ? "double" : "single"}
-      borderColor={highlight ? colors.primary : colors.border}
-      width={18}
+      paddingRight={2}
+      flexGrow={1}
     >
       <text fg={colors.textMuted}>{title}</text>
       <text fg={highlight ? colors.primary : colors.text}><strong>{value}</strong></text>
-      {delta && <text fg={colors.textMuted}>{delta}</text>}
+      {delta && <text fg={colors.success}>{delta}</text>}
       {subValue && <text fg={colors.textMuted}>{subValue}</text>}
     </box>
   );
@@ -135,20 +132,20 @@ function HelpOverlay() {
       <box justifyContent="center"><text><strong>Help</strong></text></box>
       
       <box marginTop={1}><text fg={colors.primary}><strong>Navigation</strong></text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>Tab</text><text>Switch panel focus</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>↑/↓ j/k</text><text>Navigate sessions</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>Enter</text><text>View details</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>Tab</text><text>Switch panel focus</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>↑/↓ j/k</text><text>Navigate sessions</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>Enter</text><text>View details</text></box>
       
       <box marginTop={1}><text fg={colors.primary}><strong>Actions</strong></text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>/</text><text>Filter sessions</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>s</text><text>Toggle sort</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>i</text><text>Toggle sidebar</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>r</text><text>Refresh data</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>/</text><text>Filter sessions</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>s</text><text>Toggle sort</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>i</text><text>Toggle sidebar</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>r</text><text>Refresh data</text></box>
       
       <box marginTop={1}><text fg={colors.primary}><strong>General</strong></text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>1</text><text>Dashboard tab</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>2</text><text>Providers tab</text></box>
-      <box flexDirection="row"><text width={12} fg={colors.textSubtle}>q</text><text>Quit</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>1</text><text>Dashboard tab</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>2</text><text>Providers tab</text></box>
+      <box flexDirection="row"><text width={12} fg={colors.textMuted}>q</text><text>Quit</text></box>
       
       <box justifyContent="center" marginTop={1}><text fg={colors.textMuted}>Press ? or Esc to close</text></box>
     </box>
@@ -311,6 +308,10 @@ export function RealTimeDashboard() {
     }
 
     result.sort((a, b) => {
+      const aActive = a.status === 'active' ? 1 : 0;
+      const bActive = b.status === 'active' ? 1 : 0;
+      if (bActive !== aActive) return bActive - aActive;
+      
       if (sortField === 'cost') return (b.totalCostUsd ?? 0) - (a.totalCostUsd ?? 0);
       if (sortField === 'tokens') return (b.totals.input + b.totals.output) - (a.totals.input + a.totals.output);
       return b.lastActivityAt - a.lastActivityAt;
@@ -430,7 +431,7 @@ export function RealTimeDashboard() {
         />
       )}
       
-      <box flexDirection="row" gap={1} height={5} flexShrink={0}>
+      <box flexDirection="row" gap={0} height={4} flexShrink={0}>
         <KPICard 
           title="COST" 
           value={formatCurrency(totalCost)} 
@@ -448,9 +449,9 @@ export function RealTimeDashboard() {
           subValue={`${activeCount} active`}
         />
         
-        <box flexDirection="column" flexGrow={1} border borderStyle="single" borderColor={colors.border} paddingLeft={1} paddingRight={1}>
+        <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1}>
           <box flexDirection="row" justifyContent="space-between">
-            <text fg={colors.textSubtle}>ACTIVITY</text>
+            <text fg={colors.textMuted}>ACTIVITY</text>
             <text>
               <span fg={getActivityStatus().color}>{getActivityStatus().label}</span>
               <span fg={colors.textMuted}> {formatRate(activity.ema)}/s</span>
@@ -459,9 +460,13 @@ export function RealTimeDashboard() {
           <Sparkline data={sparkData} width={50} label="tokens/s (60s)" />
         </box>
       </box>
+      
+      <box height={1} overflow="hidden">
+        <text fg={colors.border}>{'─'.repeat(300)}</text>
+      </box>
 
       <box flexDirection="column" border borderStyle="single" padding={1} borderColor={colors.border} overflow="hidden" height={5} flexShrink={0}>
-        <text fg={colors.textSubtle} marginBottom={0}>PROVIDER LIMITS</text>
+        <text fg={colors.textMuted} marginBottom={0}>PROVIDER LIMITS</text>
         <box flexDirection="row" flexWrap="wrap" gap={2} overflow="hidden">
           {configuredProviders.slice(0, 4).map(p => (
             <LimitGauge 
@@ -488,20 +493,20 @@ export function RealTimeDashboard() {
           overflow="hidden"
         >
           <box flexDirection="row" paddingLeft={1} paddingRight={1} paddingBottom={0} justifyContent="space-between">
-            <text fg={colors.textSubtle}>
+            <text fg={colors.textMuted}>
               SESSIONS{isFiltering ? ` (Filter: ${filterQuery})` : ''}{isLoading ? ' ⟳' : '  '}
             </text>
             <text fg={colors.textMuted}>{processedSessions.length} sessions</text>
           </box>
           
           <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1}>
-            <text width={8} height={1} fg={colors.textSubtle}>PID     </text>
-            <text width={12} height={1} fg={colors.textSubtle}>AGENT       </text>
-            <text width={16} height={1} fg={colors.textSubtle}>MODEL           </text>
-            <text width={8} height={1} fg={colors.textSubtle}>TOKENS  </text>
-            <text width={8} height={1} fg={colors.textSubtle}>COST    </text>
-            <text flexGrow={1} height={1} fg={colors.textSubtle} paddingLeft={2}>PROJECT</text>
-            <text width={6} height={1} fg={colors.textSubtle}>STATUS</text>
+            <text width={8} height={1} fg={colors.textMuted}>PID     </text>
+            <text width={12} height={1} fg={colors.textMuted}>AGENT       </text>
+            <text width={16} height={1} fg={colors.textMuted}>MODEL           </text>
+            <text width={8} height={1} fg={colors.textMuted}>TOKENS  </text>
+            <text width={8} height={1} fg={colors.textMuted}>COST    </text>
+            <text flexGrow={1} height={1} fg={colors.textMuted} paddingLeft={2}>PROJECT</text>
+            <text width={6} height={1} fg={colors.textMuted}>STATUS</text>
           </box>
           
           <scrollbox flexGrow={1}>
@@ -538,8 +543,14 @@ export function RealTimeDashboard() {
                     <text width={8} height={1} fg={isSelected ? rowFg : colors.text}>{formatTokens(session.totals.input + session.totals.output).padStart(7)}</text>
                     <text width={8} height={1} fg={isSelected ? rowFg : colors.success}>{formatCurrency(session.totalCostUsd ?? 0).padStart(7)}</text>
                     <text flexGrow={1} height={1} fg={isSelected ? rowFg : colors.textSubtle} paddingLeft={2}>{projectDisplay}</text>
-                    <text width={6} height={1} fg={isSelected ? rowFg : (session.status === 'active' ? colors.success : colors.textMuted)}>
-                      {session.status === 'active' ? 'active' : 'idle'}
+                    <text 
+                      width={6} 
+                      height={1} 
+                      fg={isSelected 
+                        ? (session.status === 'active' ? '#ffffff' : rowFg)
+                        : (session.status === 'active' ? colors.success : colors.textMuted)}
+                    >
+                      {session.status === 'active' ? '●' : '○'}
                     </text>
                   </box>
                 );
@@ -559,7 +570,7 @@ export function RealTimeDashboard() {
             overflow="hidden"
           >
             <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
-              <text height={1} fg={colors.textSubtle} marginBottom={1}>MODEL BREAKDOWN</text>
+              <text height={1} fg={colors.textMuted} marginBottom={1}>MODEL BREAKDOWN</text>
               {modelStats.map(([modelId, cost]) => (
                 <box key={modelId} flexDirection="column" marginBottom={1}>
                   <box flexDirection="row" justifyContent="space-between" height={1}>
@@ -576,7 +587,7 @@ export function RealTimeDashboard() {
             </box>
 
             <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
-               <text height={1} fg={colors.textSubtle} marginBottom={1}>BY PROVIDER</text>
+               <text height={1} fg={colors.textMuted} marginBottom={1}>BY PROVIDER</text>
                {providerStats.map(([provider, cost]) => (
                  <box key={provider} flexDirection="row" justifyContent="space-between" height={1}>
                    <text height={1} fg={getProviderColor(provider)}>{provider.padEnd(18)}</text>
