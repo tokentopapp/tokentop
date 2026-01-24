@@ -28,7 +28,7 @@ function CompactGauge({ label, usedPercent, windowMinutes, resetsAt, color }: Co
                     providerColor;
   
   const filledBar = '█'.repeat(filledWidth);
-  const emptyBar = '░'.repeat(emptyWidth);
+  const emptyBar = '·'.repeat(emptyWidth);
   
   const windowText = windowMinutes ? formatWindowCompact(windowMinutes) : '';
   const resetText = resetsAt ? formatResetTime(resetsAt) : '';
@@ -43,7 +43,7 @@ function CompactGauge({ label, usedPercent, windowMinutes, resetsAt, color }: Co
         <span fg={colors.gaugeBackground}>{emptyBar}</span>
         <span fg={colors.textMuted}>] </span>
         <span fg={colors.text}>{percent !== null ? `${Math.round(percent)}%` : '--'}</span>
-        {suffix && <span fg={colors.textSubtle}> ({suffix})</span>}
+        {suffix && <span fg={colors.textMuted}> ({suffix})</span>}
       </text>
     </box>
   );

@@ -37,8 +37,8 @@ export function UsageGauge({
   return (
     <box flexDirection="column" width={width}>
       <box flexDirection="row" justifyContent="space-between">
-        <text fg={colors.textSubtle}>{label}</text>
-        <text fg={colors.textMuted}>
+        <text fg={colors.textMuted}>{label}</text>
+        <text fg={colors.text}>
           {usedPercent !== null ? `${Math.round(percent)}%` : '--'}
         </text>
       </box>
@@ -49,7 +49,7 @@ export function UsageGauge({
         </text>
       </box>
       {(windowLabel || resetText) && (
-        <text fg={colors.textSubtle}>
+        <text fg={colors.textMuted}>
           {windowLabel}
           {windowLabel && resetText ? ' · ' : ''}
           {resetText}
