@@ -220,3 +220,131 @@ Display estimated costs with `~` indicator: `~$0.0234`
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - PR required for all changes
 - CI must pass before merge
+
+## TUI Debugging System
+
+Tokentop includes a comprehensive debugging system for AI-assisted visual debugging. This allows AI agents to "see" what the TUI displays and help fix layout issues.
+
+### Frame Capture (In-App)
+
+While running tokentop, use these shortcuts to capture frames:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+P` | Capture single frame to file |
+| `Ctrl+Shift+P` | Start/stop burst recording (10 frames) |
+| `Shift+D` | Toggle Debug Inspector overlay |
+| `~` | Toggle debug console |
+
+**Output location**: `~/.local/share/tokentop/logs/frames/`
+
+Each capture creates two files:
+- `frame-{timestamp}-{label}.txt` - Raw terminal text
+- `frame-{timestamp}-{label}.json` - Metadata (dimensions, timestamp)
+
+### Headless Snapshot Tool
+
+Render components in isolation without running the full app:
+
+```bash
+# List all available components
+bun src/tui/debug/snapshot.tsx --list
+
+# Snapshot a specific component
+bun src/tui/debug/snapshot.tsx debug-inspector
+bun src/tui/debug/snapshot.tsx provider-card
+
+# Snapshot all 16 registered components
+bun src/tui/debug/snapshot.tsx --all
+
+# Custom dimensions
+bun src/tui/debug/snapshot.tsx header --width 120 --height 5
+
+# Custom output path
+bun src/tui/debug/snapshot.tsx toast --output my-toast.txt
+```
+
+**Available components**: debug-inspector, header, status-bar, provider-card, provider-card-loading, provider-card-unconfigured, provider-card-error, usage-gauge, toast, toast-error, toast-warning, spinner, skeleton-text, skeleton-gauge, skeleton-provider, debug-console
+
+### AI-Assisted Debugging Workflow
+
+When debugging visual/layout issues:
+
+1. **Capture the problem**: Use `Ctrl+P` to capture a frame showing the issue
+2. **Read the frame**: `cat ~/.local/share/tokentop/logs/frames/frame-*.txt`
+3. **Analyze**: The frame shows exactly what the terminal displays - look for:
+   - Ghost characters (old text bleeding through)
+   - Misaligned columns
+   - Overflow issues (text outside borders)
+   - Missing content
+4. **Fix**: Apply fixes based on frame analysis
+5. **Verify**: Capture another frame to confirm the fix
+
+### Common OpenTUI Layout Fixes
+
+**Ghost Characters** (old text bleeding through):
+```tsx
+// Problem: Dynamic text leaves artifacts
+<text width={20}>{dynamicValue}</text>
+
+// Solution: Use padRight AND height={1}
+function padRight(str: string, len: number): string {
+  return str.length >= len ? str.slice(0, len) : str + ' '.repeat(len - str.length);
+}
+<text width={20} height={1}>{padRight(dynamicValue, 20)}</text>
+```
+
+**Row Overlap** (rows stacking on each other):
+```tsx
+// Problem: Rows without explicit height overlap
+<box flexDirection="row">
+  <text>Column 1</text>
+  <text>Column 2</text>
+</box>
+
+// Solution: Add height={1} to container and text elements
+<box flexDirection="row" height={1}>
+  <text height={1}>Column 1</text>
+  <text height={1}>Column 2</text>
+</box>
+```
+
+**Content Overflow** (text outside container borders):
+```tsx
+// Problem: Content overflows container
+<box width={35} border>
+  <text>{longText}</text>
+</box>
+
+// Solution: Add overflow="hidden"
+<box width={35} border overflow="hidden">
+  <text>{longText}</text>
+</box>
+```
+
+### Adding Components to Snapshot Tool
+
+1. Create mock data factory in `src/tui/debug/snapshot.tsx`:
+```tsx
+function createMockMyComponentProps() {
+  return {
+    title: 'Test',
+    value: 42,
+  };
+}
+```
+
+2. Register in `COMPONENT_REGISTRY`:
+```tsx
+'my-component': {
+  name: 'MyComponent',
+  description: 'Brief description',
+  defaultWidth: 40,
+  defaultHeight: 10,
+  render: () => <MyComponent {...createMockMyComponentProps()} />,
+},
+```
+
+3. Component is now available: `bun src/tui/debug/snapshot.tsx my-component`
+
+See `docs/debugging.md` for comprehensive documentation.
