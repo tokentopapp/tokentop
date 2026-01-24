@@ -5,7 +5,7 @@ import { useToastContext } from '../contexts/ToastContext.tsx';
 import { useConfig } from '../contexts/ConfigContext.tsx';
 import { type AppConfig } from '@/config/schema.ts';
 
-type SettingCategory = 'refresh' | 'display' | 'notifications';
+type SettingCategory = 'refresh' | 'display' | 'budgets' | 'alerts' | 'notifications';
 
 interface SettingItem {
   key: string;
@@ -70,6 +70,99 @@ const SETTINGS: SettingItem[] = [
     setValue: (c, v) => ({ ...c, display: { ...c.display, compactMode: v as boolean } }),
   },
   {
+    key: 'timeFormat',
+    label: 'Time Format',
+    category: 'display',
+    type: 'select',
+    options: ['12h', '24h'],
+    getValue: (c) => c.display.timeFormat,
+    setValue: (c, v) => ({ ...c, display: { ...c.display, timeFormat: v as '12h' | '24h' } }),
+  },
+  {
+    key: 'dailyBudget',
+    label: 'Daily Budget ($)',
+    category: 'budgets',
+    type: 'select',
+    options: ['None', '$10', '$25', '$50', '$100', '$200'],
+    getValue: (c) => {
+      const b = c.budgets.daily;
+      if (b === null) return 'None';
+      return `$${b}`;
+    },
+    setValue: (c, v) => {
+      const map: Record<string, number | null> = { 'None': null, '$10': 10, '$25': 25, '$50': 50, '$100': 100, '$200': 200 };
+      return { ...c, budgets: { ...c.budgets, daily: map[v as string] ?? null } };
+    },
+  },
+  {
+    key: 'weeklyBudget',
+    label: 'Weekly Budget ($)',
+    category: 'budgets',
+    type: 'select',
+    options: ['None', '$50', '$100', '$200', '$500', '$1000'],
+    getValue: (c) => {
+      const b = c.budgets.weekly;
+      if (b === null) return 'None';
+      return `$${b}`;
+    },
+    setValue: (c, v) => {
+      const map: Record<string, number | null> = { 'None': null, '$50': 50, '$100': 100, '$200': 200, '$500': 500, '$1000': 1000 };
+      return { ...c, budgets: { ...c.budgets, weekly: map[v as string] ?? null } };
+    },
+  },
+  {
+    key: 'monthlyBudget',
+    label: 'Monthly Budget ($)',
+    category: 'budgets',
+    type: 'select',
+    options: ['None', '$100', '$250', '$500', '$1000', '$2000'],
+    getValue: (c) => {
+      const b = c.budgets.monthly;
+      if (b === null) return 'None';
+      return `$${b}`;
+    },
+    setValue: (c, v) => {
+      const map: Record<string, number | null> = { 'None': null, '$100': 100, '$250': 250, '$500': 500, '$1000': 1000, '$2000': 2000 };
+      return { ...c, budgets: { ...c.budgets, monthly: map[v as string] ?? null } };
+    },
+  },
+  {
+    key: 'budgetWarningPercent',
+    label: 'Warning Threshold (%)',
+    category: 'alerts',
+    type: 'select',
+    options: ['70%', '75%', '80%', '85%', '90%'],
+    getValue: (c) => `${c.alerts.budgetWarningPercent}%`,
+    setValue: (c, v) => {
+      const percent = parseInt((v as string).replace('%', ''), 10);
+      return { ...c, alerts: { ...c.alerts, budgetWarningPercent: percent } };
+    },
+  },
+  {
+    key: 'budgetCriticalPercent',
+    label: 'Critical Threshold (%)',
+    category: 'alerts',
+    type: 'select',
+    options: ['90%', '95%', '98%', '100%'],
+    getValue: (c) => `${c.alerts.budgetCriticalPercent}%`,
+    setValue: (c, v) => {
+      const percent = parseInt((v as string).replace('%', ''), 10);
+      return { ...c, alerts: { ...c.alerts, budgetCriticalPercent: percent } };
+    },
+  },
+  {
+    key: 'providerLimitWarning',
+    label: 'Provider Limit Warning (%)',
+    category: 'alerts',
+    type: 'select',
+    options: ['80%', '85%', '90%', '95%'],
+    getValue: (c) => `${c.alerts.providerLimitWarningPercent}%`,
+    setValue: (c, v) => {
+      const percent = parseInt((v as string).replace('%', ''), 10);
+      return { ...c, alerts: { ...c.alerts, providerLimitWarningPercent: percent } };
+    },
+  },
+  {
     key: 'toastsEnabled',
     label: 'Show Toast Notifications',
     category: 'notifications',
@@ -77,11 +170,21 @@ const SETTINGS: SettingItem[] = [
     getValue: (c) => c.notifications.toastsEnabled,
     setValue: (c, v) => ({ ...c, notifications: { ...c.notifications, toastsEnabled: v as boolean } }),
   },
+  {
+    key: 'soundEnabled',
+    label: 'Sound Alerts',
+    category: 'notifications',
+    type: 'toggle',
+    getValue: (c) => c.notifications.soundEnabled,
+    setValue: (c, v) => ({ ...c, notifications: { ...c.notifications, soundEnabled: v as boolean } }),
+  },
 ];
 
 const CATEGORIES: { id: SettingCategory; label: string }[] = [
   { id: 'refresh', label: 'Refresh' },
   { id: 'display', label: 'Display' },
+  { id: 'budgets', label: 'Budgets' },
+  { id: 'alerts', label: 'Alerts' },
   { id: 'notifications', label: 'Notifications' },
 ];
 

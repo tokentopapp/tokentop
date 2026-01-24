@@ -434,6 +434,13 @@ export function RealTimeDashboard() {
         windowSec={deltas.windowSec}
         activity={activity}
         sparkData={sparkData}
+        budget={{
+          daily: config.budgets.daily,
+          weekly: config.budgets.weekly,
+          monthly: config.budgets.monthly,
+          warningPercent: config.alerts.budgetWarningPercent,
+          criticalPercent: config.alerts.budgetCriticalPercent,
+        }}
       />
 
       <box flexDirection="column" border borderStyle="single" padding={1} borderColor={colors.border} overflow="hidden" height={5} flexShrink={0}>

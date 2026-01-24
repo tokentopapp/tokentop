@@ -1,7 +1,9 @@
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { Sparkline } from './Sparkline.tsx';
+import { usePulse } from '../hooks/usePulse.ts';
 
 type MetricType = 'cost' | 'tokens' | 'requests' | 'rate' | 'default';
+type BudgetStatus = 'ok' | 'warning' | 'critical';
 
 interface KPICardProps {
   title: string;
@@ -9,23 +11,34 @@ interface KPICardProps {
   delta?: string;
   subValue?: string;
   metric?: MetricType;
+  budgetStatus?: BudgetStatus;
 }
 
-function KPICard({ title, value, delta, subValue, metric = 'default' }: KPICardProps) {
+function KPICard({ title, value, delta, subValue, metric = 'default', budgetStatus }: KPICardProps) {
   const colors = useColors();
+  const pulseStep = usePulse({ enabled: budgetStatus === 'critical', intervalMs: 200 });
   
-  // Semantic color mapping per spec
-  const getMetricColor = (m: MetricType): string => {
+  const getMetricColor = (m: MetricType, status?: BudgetStatus): string => {
+    if (m === 'cost' && status) {
+      if (status === 'critical') {
+        const intensity = Math.sin((pulseStep / 12) * Math.PI * 2) * 0.5 + 0.5;
+        return intensity > 0.5 ? colors.error : colors.warning;
+      }
+      if (status === 'warning') return colors.warning;
+      return colors.success;
+    }
     switch (m) {
-      case 'cost': return colors.success;      // Green - money/budget
-      case 'tokens': return colors.primary;    // Cyan/Blue - primary metric
-      case 'requests': return colors.secondary; // Purple - secondary metric
-      case 'rate': return colors.warning;      // Yellow/Orange - burn rate
+      case 'cost': return colors.success;
+      case 'tokens': return colors.primary;
+      case 'requests': return colors.secondary;
+      case 'rate': return colors.warning;
       default: return colors.text;
     }
   };
   
-  const valueColor = getMetricColor(metric);
+  const valueColor = getMetricColor(metric, budgetStatus);
+  const deltaColor = budgetStatus === 'critical' ? colors.error : 
+                     budgetStatus === 'warning' ? colors.warning : colors.success;
   
   return (
     <box 
@@ -36,7 +49,7 @@ function KPICard({ title, value, delta, subValue, metric = 'default' }: KPICardP
     >
       <text fg={colors.textMuted}>{title}</text>
       <text fg={valueColor}><strong>{value}</strong></text>
-      {delta && <text fg={colors.success}>{delta}</text>}
+      {delta && <text fg={deltaColor}>{delta}</text>}
       {subValue && <text fg={colors.textMuted}>{subValue}</text>}
     </box>
   );
@@ -45,6 +58,14 @@ function KPICard({ title, value, delta, subValue, metric = 'default' }: KPICardP
 export interface ActivityStatus {
   label: string;
   color: string;
+}
+
+export interface BudgetInfo {
+  daily: number | null;
+  weekly: number | null;
+  monthly: number | null;
+  warningPercent: number;
+  criticalPercent: number;
 }
 
 export interface KpiStripProps {
@@ -57,6 +78,7 @@ export interface KpiStripProps {
   windowSec: number;
   activity: { rate: number; ema: number; isSpike: boolean };
   sparkData: number[];
+  budget?: BudgetInfo;
 }
 
 export function KpiStrip({
@@ -69,6 +91,7 @@ export function KpiStrip({
   windowSec,
   activity,
   sparkData,
+  budget,
 }: KpiStripProps) {
   const colors = useColors();
   
@@ -83,6 +106,17 @@ export function KpiStrip({
     return `${(sec / 3600).toFixed(1)}h`;
   };
   
+  const getBudgetStatus = (): BudgetStatus => {
+    if (!budget) return 'ok';
+    const activeBudget = budget.daily ?? budget.weekly ?? budget.monthly;
+    if (!activeBudget || activeBudget <= 0) return 'ok';
+    const percent = (totalCost / activeBudget) * 100;
+    if (percent >= budget.criticalPercent) return 'critical';
+    if (percent >= budget.warningPercent) return 'warning';
+    return 'ok';
+  };
+  
+  const budgetStatus = getBudgetStatus();
   const hasEnoughHistory = windowSec >= 30;
   const burnRateCostPerHour = hasEnoughHistory ? deltaCost * (3600 / windowSec) : 0;
   const burnRateTokensPerMin = hasEnoughHistory ? deltaTokens * (60 / windowSec) : 0;
@@ -107,6 +141,7 @@ export function KpiStrip({
           value={formatCurrency(totalCost)} 
           delta={hasEnoughHistory ? `+${formatCurrency(deltaCost)} (${windowLabel})` : 'gathering...'} 
           metric="cost"
+          budgetStatus={budgetStatus}
         />
         <KPICard 
           title="TOKENS" 
