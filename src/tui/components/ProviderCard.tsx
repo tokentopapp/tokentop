@@ -19,7 +19,7 @@ function CompactGauge({ label, usedPercent, resetsAt, color }: CompactGaugeProps
   const providerColor = color ?? colors.primary;
   const percent = usedPercent ?? 0;
   
-  const barWidth = 12;
+  const barWidth = 20;
   const filledWidth = Math.round((percent / 100) * barWidth);
   const emptyWidth = barWidth - filledWidth;
   
@@ -32,23 +32,15 @@ function CompactGauge({ label, usedPercent, resetsAt, color }: CompactGaugeProps
   
   const resetText = resetsAt ? formatResetTime(resetsAt) : '';
   
-  const truncatedLabel = label.length > 18 ? label.slice(0, 17) + '…' : label;
-  
   return (
-    <box flexDirection="column" height={2}>
-      <box flexDirection="row" height={1}>
-        <text>
-          <span fg={colors.textMuted}>{truncatedLabel.padEnd(18)} </span>
-          <span fg={fillColor}>{filledBar}</span>
-          <span fg={colors.gaugeBackground}>{emptyBar}</span>
-          <span fg={colors.text}> {(percent !== null ? `${Math.round(percent)}%` : '--').padStart(4)}</span>
-        </text>
-      </box>
-      {resetText && (
-        <box height={1}>
-          <text fg={colors.textMuted}>{''.padEnd(19)}{resetText}</text>
-        </box>
-      )}
+    <box flexDirection="column">
+      <text fg={providerColor}>{label}</text>
+      <text>
+        <span fg={fillColor}>{filledBar}</span>
+        <span fg={colors.gaugeBackground}>{emptyBar}</span>
+        <span fg={colors.text}> {percent !== null ? `${Math.round(percent)}%` : '--'}</span>
+      </text>
+      {resetText && <text fg={colors.textMuted}>{resetText}</text>}
     </box>
   );
 }
