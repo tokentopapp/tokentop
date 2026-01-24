@@ -157,7 +157,7 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(({
       flexDirection="column"
       gap={1}
       width={44}
-      height={18}
+      minHeight={10}
       onMouseDown={handleClick}
     >
       <box flexDirection="row" justifyContent="space-between" alignItems="center">

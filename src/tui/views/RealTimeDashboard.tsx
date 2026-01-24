@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useKeyboard } from '@opentui/react';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+import type { ScrollBoxRenderable } from '@opentui/core';
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { usePlugins } from '../contexts/PluginContext.tsx';
 import { useInputFocus } from '../contexts/InputContext.tsx';
@@ -9,17 +10,21 @@ import { DebugInspectorOverlay } from '../components/DebugInspectorOverlay.tsx';
 import { KpiStrip } from '../components/KpiStrip.tsx';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer.tsx';
 
+interface LimitGaugeProps {
+  label: string;
+  usedPercent: number | null;
+  color: string;
+  ghost?: boolean | undefined;
+  error?: string | undefined;
+}
+
 function LimitGauge({ 
   label, 
   usedPercent, 
   color,
   ghost = false,
-}: { 
-  label: string; 
-  usedPercent: number | null; 
-  color: string;
-  ghost?: boolean;
-}) {
+  error,
+}: LimitGaugeProps) {
   const colors = useColors();
   const barWidth = 10;
   
@@ -32,6 +37,20 @@ function LimitGauge({
           <span fg={colors.textSubtle}>{ghostLabel} </span>
           <span fg={colors.textSubtle}>{'·'.repeat(barWidth)}</span>
           <span fg={colors.textSubtle}> N/A</span>
+        </text>
+      </box>
+    );
+  }
+  
+  if (error) {
+    const displayLabel = label.length > 10 ? label.slice(0, 9) + '…' : label.padEnd(10);
+    return (
+      <box width={30} overflow="hidden">
+        <text>
+          <span fg={colors.error}> ✗ </span>
+          <span fg={colors.text}>{displayLabel} </span>
+          <span fg={colors.error}>{'·'.repeat(barWidth)}</span>
+          <span fg={colors.error}> ERR</span>
         </text>
       </box>
     );
@@ -111,6 +130,9 @@ export function RealTimeDashboard() {
   const { setInputFocused } = useInputFocus();
   const { sessions: agentSessions, isLoading, refreshSessions } = useAgentSessions();
   const { windowMs, cycleWindow, windowLabel } = useTimeWindow();
+  const { height: terminalHeight } = useTerminalDimensions();
+  
+  const visibleRows = Math.max(1, terminalHeight - 29);
   
   // Sparkline data for activity visualization
   const [sparkData, setSparkData] = useState<number[]>([]);
@@ -125,15 +147,20 @@ export function RealTimeDashboard() {
   const [filterQuery, setFilterQuery] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [sortField, setSortField] = useState<'cost' | 'tokens' | 'time'>('cost');
+  const [pendingG, setPendingG] = useState(false);
+  const [scrollOffset, setScrollOffset] = useState(0);
   
   // Refs to avoid stale closures in useKeyboard
   const isFilteringRef = useRef(isFiltering);
   const modalOpenRef = useRef(false);
+  const sessionsScrollboxRef = useRef<ScrollBoxRenderable>(null);
+  const pendingGRef = useRef(false);
   
   useEffect(() => {
     isFilteringRef.current = isFiltering;
     modalOpenRef.current = showHelp || showDebugInspector || showSessionDrawer;
-  }, [isFiltering, showHelp, showDebugInspector, showSessionDrawer]);
+    pendingGRef.current = pendingG;
+  }, [isFiltering, showHelp, showDebugInspector, showSessionDrawer, pendingG]);
   
   const historyRef = useRef<{time: number, cost: number, tokens: number}[]>([]);
   const [deltas, setDeltas] = useState({ cost: 0, tokens: 0, windowSec: 0 });
@@ -297,6 +324,24 @@ export function RealTimeDashboard() {
     return result;
   }, [agentSessions, filterQuery, sortField, windowMs]);
 
+  useEffect(() => {
+    if (!sessionsScrollboxRef.current || processedSessions.length === 0) return;
+    
+    let newOffset = scrollOffset;
+    
+    if (selectedRow < scrollOffset) {
+      newOffset = selectedRow;
+    } else if (selectedRow >= scrollOffset + visibleRows) {
+      newOffset = selectedRow - visibleRows + 1;
+    }
+    
+    if (newOffset !== scrollOffset) {
+      setScrollOffset(newOffset);
+    }
+    
+    sessionsScrollboxRef.current.scrollTo(newOffset);
+  }, [selectedRow, processedSessions, scrollOffset, visibleRows]);
+
   useKeyboard((key) => {
     if (key.sequence === '?' || (key.shift && key.name === '/')) {
       setShowHelp(prev => !prev);
@@ -373,11 +418,29 @@ export function RealTimeDashboard() {
 
     if (focusedPanel === 'sessions') {
       if (key.name === 'down' || key.name === 'j') {
+        setPendingG(false);
         setSelectedRow(curr => Math.min(curr + 1, processedSessions.length - 1));
       } else if (key.name === 'up' || key.name === 'k') {
+        setPendingG(false);
         setSelectedRow(curr => Math.max(curr - 1, 0));
+      } else if (key.shift && key.name === 'g') {
+        setPendingG(false);
+        setSelectedRow(processedSessions.length - 1);
+        setScrollOffset(Math.max(0, processedSessions.length - 1));
+      } else if (key.name === 'g') {
+        if (pendingGRef.current) {
+          setSelectedRow(0);
+          setScrollOffset(0);
+          setPendingG(false);
+        } else {
+          setPendingG(true);
+          setTimeout(() => setPendingG(false), 500);
+        }
       } else if (key.name === 'return' && processedSessions.length > 0) {
+        setPendingG(false);
         setShowSessionDrawer(true);
+      } else {
+        setPendingG(false);
       }
     }
   });
@@ -448,7 +511,8 @@ export function RealTimeDashboard() {
               key={p.plugin.id} 
               label={p.plugin.name} 
               usedPercent={getMaxUsedPercent(p)} 
-              color={getProviderColor(p.plugin.id)} 
+              color={getProviderColor(p.plugin.id)}
+              {...(p.usage?.error ? { error: p.usage.error } : {})}
             />
           ))}
           {configuredProviders.length === 0 && (
@@ -467,11 +531,11 @@ export function RealTimeDashboard() {
           borderColor={focusedPanel === 'sessions' ? colors.primary : colors.border}
           overflow="hidden"
         >
-          <box flexDirection="row" paddingLeft={1} paddingRight={1} paddingBottom={0} justifyContent="space-between">
-            <text fg={colors.textMuted}>
+          <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1} justifyContent="space-between" overflow="hidden">
+            <text height={1} fg={colors.textMuted}>
               SESSIONS{isFiltering ? ` (Filter: ${filterQuery})` : ''}{isLoading ? ' ⟳' : '  '}
             </text>
-            <text fg={colors.textMuted}>[{windowLabel}] {processedSessions.length} sessions</text>
+            <text height={1} fg={colors.textMuted}>[{windowLabel}] {processedSessions.length} sessions</text>
           </box>
           
           <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1}>
@@ -484,7 +548,7 @@ export function RealTimeDashboard() {
             <text width={6} height={1} fg={colors.textMuted}>STATUS</text>
           </box>
           
-          <scrollbox flexGrow={1}>
+          <scrollbox ref={sessionsScrollboxRef} flexGrow={1}>
             <box flexDirection="column">
               {processedSessions.length === 0 && (
                 <box paddingLeft={1}>

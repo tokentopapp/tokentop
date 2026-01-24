@@ -5,8 +5,11 @@ import { useColors } from '../contexts/ThemeContext.tsx';
 import { usePlugins, type ProviderState } from '../contexts/PluginContext.tsx';
 import { useInputFocus } from '../contexts/InputContext.tsx';
 import { ProviderCard } from '../components/ProviderCard.tsx';
+import { GhostProviderCard } from '../components/GhostProviderCard.tsx';
+import { ProvidersList } from '../components/ProvidersList.tsx';
 
 type SortMode = 'name' | 'usage' | 'status';
+type ViewMode = 'cards' | 'list';
 
 export function Dashboard() {
   const colors = useColors();
@@ -16,7 +19,16 @@ export function Dashboard() {
   
   const [filterQuery, setFilterQuery] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('name');
+  const [sortMode, setSortMode] = useState<SortMode>('status');
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [showUnconfigured, setShowUnconfigured] = useState(true);
+
+  // Refs to avoid stale closures in useKeyboard
+  const isFilteringRef = useRef(isFiltering);
+  
+  useEffect(() => {
+    isFilteringRef.current = isFiltering;
+  }, [isFiltering]);
 
   useEffect(() => {
     setInputFocused(isFiltering);
@@ -84,23 +96,28 @@ export function Dashboard() {
   }, [providerList, filterQuery, sortMode, getMaxUsage]);
 
   const configured = filteredAndSortedProviders;
+  const unconfigured = useMemo(() => 
+    providerList.filter((p) => !p.configured),
+    [providerList]
+  );
 
   const cycleFocus = useCallback((direction: 1 | -1) => {
-    if (configured.length === 0) return;
+    const total = configured.length + (showUnconfigured ? unconfigured.length : 0);
+    if (total === 0) return;
 
     setFocusedIndex((current) => {
       if (current === null) {
-        return direction === 1 ? 0 : configured.length - 1;
+        return direction === 1 ? 0 : total - 1;
       }
       const next = current + direction;
       if (next < 0) return null;
-      if (next >= configured.length) return null;
+      if (next >= total) return null;
       return next;
     });
-  }, [configured.length]);
+  }, [configured.length, unconfigured.length, showUnconfigured]);
 
   useKeyboard((key) => {
-    if (isFiltering) {
+    if (isFilteringRef.current) {
       if (key.name === 'escape') {
         setIsFiltering(false);
         setFilterQuery('');
@@ -113,7 +130,11 @@ export function Dashboard() {
       return; 
     }
 
-    if (key.name === 'tab' && !key.shift) {
+    if (key.name === 'down' || key.name === 'j') {
+      cycleFocus(1);
+    } else if (key.name === 'up' || key.name === 'k') {
+      cycleFocus(-1);
+    } else if (key.name === 'tab' && !key.shift) {
       cycleFocus(1);
     } else if (key.name === 'tab' && key.shift) {
       cycleFocus(-1);
@@ -131,6 +152,10 @@ export function Dashboard() {
         if (current === 'usage') return 'name';
         return 'status';
       });
+    } else if (key.name === 'v') {
+      setViewMode(current => current === 'cards' ? 'list' : 'cards');
+    } else if (key.name === 'u') {
+      setShowUnconfigured(current => !current);
     }
   });
 
@@ -142,112 +167,123 @@ export function Dashboard() {
     );
   }
 
-  const unconfigured = providerList.filter((p) => !p.configured);
+  const totalConfigured = configured.length;
+  const totalUnconfigured = unconfigured.length;
 
   return (
     <box flexDirection="column" flexGrow={1} padding={1} gap={1}>
-      <box flexDirection="row" gap={2} alignItems="center" height={1}>
-        {isFiltering ? (
-          <box flexDirection="row" gap={1} alignItems="center">
-            <text fg={colors.primary}>Filter:</text>
-            <input
-              ref={inputRef}
-              value={filterQuery}
-              onInput={(value: string) => setFilterQuery(value)}
-              focused={isFiltering}
-              width={20}
-              backgroundColor={colors.background}
-              textColor={colors.text}
-              cursorColor={colors.primary}
-            />
-            <text fg={colors.textSubtle}>(esc to clear)</text>
-          </box>
-        ) : (
-          <text fg={colors.textSubtle}>
-            {filterQuery ? `Filter: "${filterQuery}"` : 'Type / to filter'}
+      <box flexDirection="row" gap={2} alignItems="center" height={1} justifyContent="space-between">
+        <box flexDirection="row" gap={2} alignItems="center">
+          {isFiltering ? (
+            <box flexDirection="row" gap={1} alignItems="center">
+              <text fg={colors.primary}>Filter:</text>
+              <input
+                ref={inputRef}
+                value={filterQuery}
+                onInput={(value: string) => setFilterQuery(value)}
+                focused={isFiltering}
+                width={20}
+                backgroundColor={colors.background}
+                textColor={colors.text}
+                cursorColor={colors.primary}
+              />
+              <text fg={colors.textSubtle}>(esc to clear)</text>
+            </box>
+          ) : (
+            <text fg={colors.textSubtle}>
+              {filterQuery ? `Filter: "${filterQuery}"` : '/ filter'}
+            </text>
+          )}
+          
+          <text fg={colors.textSubtle}>|</text>
+          
+          <text>
+            <span fg={colors.textSubtle}>Sort: </span>
+            <span fg={colors.primary}>{sortMode.toUpperCase()}</span>
           </text>
-        )}
-        
-        <text fg={colors.textSubtle}>|</text>
-        
-        <text>
-          <span fg={colors.textSubtle}>Sort: </span>
-          <span fg={colors.primary}>{sortMode.toUpperCase()}</span>
+
+          <text fg={colors.textSubtle}>|</text>
+
+          <text>
+            <span fg={colors.textSubtle}>View: </span>
+            <span fg={colors.primary}>{viewMode === 'cards' ? 'Cards' : 'List'}</span>
+          </text>
+        </box>
+
+        <text fg={colors.textMuted}>
+          {totalConfigured} configured{totalUnconfigured > 0 ? `, ${totalUnconfigured} unconfigured` : ''}
         </text>
       </box>
 
-      {configured.length > 0 ? (
-        <box flexDirection="column" gap={1} flexGrow={1}>
-          <text fg={colors.text}>
-            <strong>Configured Providers ({configured.length})</strong>
-            {focusedIndex !== null && (
-              <span fg={colors.textSubtle}> (←/h →/l: page, space: toggle auto)</span>
-            )}
-          </text>
-          <scrollbox
-            ref={scrollBoxRef}
-            flexGrow={1}
-            focused={!isFiltering}
-            style={{
-              scrollbarOptions: {
-                trackOptions: {
-                  foregroundColor: colors.textSubtle,
-                },
-              },
-            }}
-          >
-            <box 
-              ref={containerRef}
-              flexDirection="row" 
-              flexWrap="wrap" 
-              gap={1}
-            >
-              {configured.map((state, index) => (
-                <ProviderCard
-                  ref={(el) => { cardRefs.current[index] = el; }}
-                  key={state.plugin.id}
-                  name={state.plugin.name}
-                  configured={state.configured}
-                  loading={state.loading}
-                  usage={state.usage}
-                  color={state.plugin.meta?.color}
-                  focused={focusedIndex === index && !isFiltering}
-                  onFocus={() => setFocusedIndex(index)}
-                />
-              ))}
-            </box>
-          </scrollbox>
-        </box>
+      {viewMode === 'list' ? (
+        <ProvidersList
+          providers={configured}
+          selectedIndex={focusedIndex}
+          onSelect={setFocusedIndex}
+        />
       ) : (
-        <box flexGrow={1} justifyContent="center" alignItems="center">
-          <text fg={colors.textMuted}>
-            {filterQuery ? 'No matching providers found' : 'No configured providers'}
-          </text>
-        </box>
+        <>
+          {configured.length > 0 ? (
+            <box flexDirection="column" gap={1} flexGrow={1}>
+              <scrollbox
+                ref={scrollBoxRef}
+                flexGrow={1}
+                focused={!isFiltering}
+                style={{
+                  scrollbarOptions: {
+                    trackOptions: {
+                      foregroundColor: colors.textSubtle,
+                    },
+                  },
+                }}
+              >
+                <box 
+                  ref={containerRef}
+                  flexDirection="row" 
+                  flexWrap="wrap" 
+                  gap={1}
+                >
+                  {configured.map((state, index) => (
+                    <ProviderCard
+                      ref={(el) => { cardRefs.current[index] = el; }}
+                      key={state.plugin.id}
+                      name={state.plugin.name}
+                      configured={state.configured}
+                      loading={state.loading}
+                      usage={state.usage}
+                      color={state.plugin.meta?.color}
+                      focused={focusedIndex === index && !isFiltering}
+                      onFocus={() => setFocusedIndex(index)}
+                    />
+                  ))}
+                  
+                  {showUnconfigured && unconfigured.map((state, index) => (
+                    <GhostProviderCard
+                      key={state.plugin.id}
+                      name={state.plugin.name}
+                      focused={focusedIndex === configured.length + index && !isFiltering}
+                      onFocus={() => setFocusedIndex(configured.length + index)}
+                    />
+                  ))}
+                </box>
+              </scrollbox>
+            </box>
+          ) : (
+            <box flexGrow={1} justifyContent="center" alignItems="center">
+              <text fg={colors.textMuted}>
+                {filterQuery ? 'No matching providers found' : 'No configured providers'}
+              </text>
+            </box>
+          )}
+        </>
       )}
 
-      {unconfigured.length > 0 && !filterQuery && (
-        <box flexDirection="column" gap={1} flexShrink={0}>
-          <text fg={colors.textSubtle}>
-            <strong>Unconfigured</strong>
-          </text>
-          <box flexDirection="row" flexWrap="wrap" gap={1}>
-            {unconfigured.map((state) => (
-              <box key={state.plugin.id} padding={1}>
-                <text fg={colors.textSubtle}>
-                  ○ {state.plugin.name}
-                </text>
-              </box>
-            ))}
-          </box>
-        </box>
-      )}
-
-      {providerList.length === 0 && (
-        <box flexGrow={1} justifyContent="center" alignItems="center">
-          <text fg={colors.textMuted}>No providers found</text>
-        </box>
-      )}
+      <box flexDirection="row" paddingLeft={1}>
+        <text fg={colors.textSubtle}>
+          {isFiltering ? 'Type to filter  Esc cancel  Enter apply' :
+           '↑↓ navigate  / filter  s sort  v toggle view  u toggle unconfigured'}
+        </text>
+      </box>
     </box>
   );
 }
