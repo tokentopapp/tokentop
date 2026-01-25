@@ -1,59 +1,32 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+import { useTerminalDimensions } from '@opentui/react';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { usePlugins } from '../contexts/PluginContext.tsx';
-import { useInputFocus } from '../contexts/InputContext.tsx';
 import { useAgentSessions } from '../contexts/AgentSessionContext.tsx';
 import { useTimeWindow } from '../contexts/TimeWindowContext.tsx';
-import { useToastContext } from '../contexts/ToastContext.tsx';
 import { useConfig } from '../contexts/ConfigContext.tsx';
 import { useDashboardRuntime } from '../contexts/DashboardRuntimeContext.tsx';
+import { useDashboardKeyboard } from '../hooks/useDashboardKeyboard.ts';
 import { DebugInspectorOverlay } from '../components/DebugInspectorOverlay.tsx';
 import { KpiStrip } from '../components/KpiStrip.tsx';
 import { SessionDetailsDrawer } from '../components/SessionDetailsDrawer.tsx';
+import { SessionsTable } from '../components/SessionsTable.tsx';
+import { SidebarBreakdown } from '../components/SidebarBreakdown.tsx';
 import { LimitGauge } from '../components/LimitGauge.tsx';
 import { HelpOverlay } from '../components/HelpOverlay.tsx';
-import { copyToClipboard } from '@/utils/clipboard.ts';
-import type { AgentSessionAggregate } from '../../agents/types.ts';
-
-function formatSessionSummary(session: AgentSessionAggregate): string {
-  const totalTokens = session.totals.input + session.totals.output;
-  const cost = session.totalCostUsd?.toFixed(4) ?? '0.00';
-  const primaryModel = session.streams[0]?.modelId ?? 'unknown';
-  const duration = Math.round((session.lastActivityAt - session.startedAt) / 1000);
-  const durationStr = duration > 3600 
-    ? `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m`
-    : duration > 60 
-      ? `${Math.floor(duration / 60)}m ${duration % 60}s`
-      : `${duration}s`;
-
-  return [
-    `Session: ${session.sessionId}`,
-    `Agent: ${session.agentName}`,
-    `Model: ${primaryModel}`,
-    `Status: ${session.status}`,
-    `Duration: ${durationStr}`,
-    `Tokens: ${totalTokens.toLocaleString()} (in: ${session.totals.input.toLocaleString()}, out: ${session.totals.output.toLocaleString()})`,
-    `Cost: $${cost}`,
-    `Requests: ${session.requestCount}`,
-    session.projectPath ? `Project: ${session.projectPath}` : null,
-  ].filter(Boolean).join('\n');
-}
 
 export function RealTimeDashboard() {
   const colors = useColors();
   const { providers } = usePlugins();
-  const { setInputFocused } = useInputFocus();
-  const { sessions: agentSessions, isLoading, refreshSessions } = useAgentSessions();
-  const { windowMs, cycleWindow, windowLabel } = useTimeWindow();
+  const { sessions: agentSessions, isLoading } = useAgentSessions();
+  const { windowMs, windowLabel } = useTimeWindow();
   const { height: terminalHeight } = useTerminalDimensions();
-  const { showToast } = useToastContext();
   const { config } = useConfig();
   const { activity, sparkData, deltas, emaRef, debugDataRef } = useDashboardRuntime();
-  
+
   const visibleRows = Math.max(1, terminalHeight - 29);
-  
+
   const [showHelp, setShowHelp] = useState(false);
   const [showDebugInspector, setShowDebugInspector] = useState(false);
   const [showSessionDrawer, setShowSessionDrawer] = useState(false);
@@ -65,18 +38,8 @@ export function RealTimeDashboard() {
   const [sortField, setSortField] = useState<'cost' | 'tokens' | 'time'>('cost');
   const [pendingG, setPendingG] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
-  
-  // Refs to avoid stale closures in useKeyboard
-  const isFilteringRef = useRef(isFiltering);
-  const modalOpenRef = useRef(false);
+
   const sessionsScrollboxRef = useRef<ScrollBoxRenderable>(null);
-  const pendingGRef = useRef(false);
-  
-  useEffect(() => {
-    isFilteringRef.current = isFiltering;
-    modalOpenRef.current = showHelp || showDebugInspector || showSessionDrawer;
-    pendingGRef.current = pendingG;
-  }, [isFiltering, showHelp, showDebugInspector, showSessionDrawer, pendingG]);
 
   const configuredProviders = useMemo(() => {
     return Array.from(providers.values())
@@ -100,9 +63,6 @@ export function RealTimeDashboard() {
     if (id.includes('github') || id.includes('copilot')) return '#6e40c9';
     return colors.primary;
   };
-
-  const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
-  const formatTokens = (val: number) => val > 1000000 ? `${(val/1000000).toFixed(1)}M` : `${(val/1000).toFixed(1)}K`;
 
   const processedSessions = useMemo(() => {
     let result = [...agentSessions];
@@ -136,168 +96,56 @@ export function RealTimeDashboard() {
 
   useEffect(() => {
     if (!sessionsScrollboxRef.current || processedSessions.length === 0) return;
-    
+
     let newOffset = scrollOffset;
-    
+
     if (selectedRow < scrollOffset) {
       newOffset = selectedRow;
     } else if (selectedRow >= scrollOffset + visibleRows) {
       newOffset = selectedRow - visibleRows + 1;
     }
-    
+
     if (newOffset !== scrollOffset) {
       setScrollOffset(newOffset);
     }
-    
+
     sessionsScrollboxRef.current.scrollTo(newOffset);
   }, [selectedRow, processedSessions, scrollOffset, visibleRows]);
 
-  useKeyboard((key) => {
-    if (key.sequence === '?' || (key.shift && key.name === '/')) {
-      setShowHelp(prev => !prev);
-      return;
-    }
-    
-    if (key.shift && key.name === 'd') {
-      setShowDebugInspector(prev => !prev);
-      return;
-    }
-
-    if (modalOpenRef.current) {
-      if (key.name === 'escape' || key.name === 'q' || key.sequence === '?') {
-        setShowHelp(false);
-        setShowDebugInspector(false);
-        setShowSessionDrawer(false);
-        return;
-      }
-      
-      if (showSessionDrawer && processedSessions[selectedRow]) {
-        if (key.name === 'c') {
-          const summary = formatSessionSummary(processedSessions[selectedRow]);
-          copyToClipboard(summary).then(() => {
-            showToast('Copied to clipboard');
-          }).catch(() => {
-            showToast('Copy failed', 'error');
-          });
-          return;
-        }
-        if (key.name === 'x') {
-          showToast('Export not yet implemented', 'info');
-          return;
-        }
-      }
-      return;
-    }
-
-    if (isFilteringRef.current) {
-      if (key.name === 'enter' || key.name === 'return') {
-        setIsFiltering(false);
-        setInputFocused(false);
-        return;
-      }
-      if (key.name === 'escape') {
-        setFilterQuery('');
-        setIsFiltering(false);
-        setInputFocused(false);
-        return;
-      }
-      if (key.name === 'backspace') {
-        setFilterQuery(q => q.slice(0, -1));
-        return;
-      }
-      if (key.sequence && key.sequence.length === 1 && /^[a-zA-Z0-9\-_./]$/.test(key.sequence)) {
-        setFilterQuery(q => q + key.sequence);
-        return;
-      }
-      return;
-    }
-
-    if (key.name === 'tab') {
-      setFocusedPanel(curr => curr === 'sessions' ? 'sidebar' : 'sessions');
-      return;
-    }
-
-    if (key.name === 'i') {
-      setSidebarCollapsed(curr => !curr);
-      return;
-    }
-
-    if (key.name === '/' || key.sequence === '/') {
-      setIsFiltering(true);
-      setInputFocused(true);
-      return;
-    }
-    
-    if (key.name === 's') {
-      setSortField(curr => curr === 'cost' ? 'tokens' : 'cost');
-      return;
-    }
-    
-    if (key.name === 't') {
-      cycleWindow();
-      return;
-    }
-
-    if (key.name === 'r') {
-      refreshSessions();
-      return;
-    }
-
-    if (focusedPanel === 'sessions') {
-      if (key.name === 'down' || key.name === 'j') {
-        setPendingG(false);
-        setSelectedRow(curr => Math.min(curr + 1, processedSessions.length - 1));
-      } else if (key.name === 'up' || key.name === 'k') {
-        setPendingG(false);
-        setSelectedRow(curr => Math.max(curr - 1, 0));
-      } else if (key.shift && key.name === 'g') {
-        setPendingG(false);
-        setSelectedRow(processedSessions.length - 1);
-        setScrollOffset(Math.max(0, processedSessions.length - 1));
-      } else if (key.name === 'g') {
-        if (pendingGRef.current) {
-          setSelectedRow(0);
-          setScrollOffset(0);
-          setPendingG(false);
-        } else {
-          setPendingG(true);
-          setTimeout(() => setPendingG(false), 500);
-        }
-      } else if (key.name === 'return' && processedSessions.length > 0) {
-        setPendingG(false);
-        setShowSessionDrawer(true);
-      } else {
-        setPendingG(false);
-      }
-    }
+  useDashboardKeyboard({
+    state: {
+      showHelp,
+      showDebugInspector,
+      showSessionDrawer,
+      selectedRow,
+      focusedPanel,
+      sidebarCollapsed,
+      filterQuery,
+      isFiltering,
+      sortField,
+      pendingG,
+      scrollOffset,
+    },
+    actions: {
+      setShowHelp,
+      setShowDebugInspector,
+      setShowSessionDrawer,
+      setSelectedRow,
+      setFocusedPanel,
+      setSidebarCollapsed,
+      setFilterQuery,
+      setIsFiltering,
+      setSortField,
+      setPendingG,
+      setScrollOffset,
+    },
+    processedSessions,
   });
 
   const totalCost = agentSessions.reduce((acc, s) => acc + (s.totalCostUsd ?? 0), 0);
   const totalTokens = agentSessions.reduce((acc, s) => acc + s.totals.input + s.totals.output, 0);
   const totalRequests = agentSessions.reduce((acc, s) => acc + s.requestCount, 0);
   const activeCount = agentSessions.filter(s => s.status === 'active').length;
-
-  const modelStats = useMemo(() => {
-    const stats: Record<string, number> = {};
-    agentSessions.forEach(s => {
-      s.streams.forEach(st => {
-        stats[st.modelId] = (stats[st.modelId] || 0) + (st.costUsd ?? 0);
-      });
-    });
-    return Object.entries(stats).sort(([, a], [, b]) => b - a).slice(0, 5);
-  }, [agentSessions]);
-
-  const providerStats = useMemo(() => {
-    const stats: Record<string, number> = {};
-    agentSessions.forEach(s => {
-      s.streams.forEach(st => {
-        stats[st.providerId] = (stats[st.providerId] || 0) + (st.costUsd ?? 0);
-      });
-    });
-    return Object.entries(stats).sort(([, a], [, b]) => b - a);
-  }, [agentSessions]);
-
-  const maxModelCost = Math.max(...modelStats.map(([, c]) => c), 0.01);
 
   return (
     <box flexDirection="column" flexGrow={1} padding={1} gap={1} overflow="hidden">
@@ -356,120 +204,24 @@ export function RealTimeDashboard() {
       </box>
 
       <box flexDirection="row" gap={1} flexGrow={1} minHeight={10}>
-        
-        <box 
-          flexDirection="column" 
-          flexGrow={2} 
-          border 
-          borderStyle={focusedPanel === 'sessions' ? "double" : "single"} 
-          borderColor={focusedPanel === 'sessions' ? colors.primary : colors.border}
-          overflow="hidden"
-        >
-          <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1} justifyContent="space-between" overflow="hidden">
-            <text height={1} fg={colors.textMuted}>
-              SESSIONS{isFiltering ? ` (Filter: ${filterQuery})` : ''}{isLoading ? ' ⟳' : '  '}
-            </text>
-            <text height={1} fg={colors.textMuted}>[{windowLabel}] {processedSessions.length} sessions</text>
-          </box>
-          
-          <box flexDirection="row" paddingLeft={1} paddingRight={1} height={1}>
-            <text width={8} height={1} fg={colors.textMuted}>PID     </text>
-            <text width={12} height={1} fg={colors.textMuted}>AGENT       </text>
-            <text width={16} height={1} fg={colors.textMuted}>MODEL           </text>
-            <text width={8} height={1} fg={colors.textMuted}>TOKENS  </text>
-            <text width={8} height={1} fg={colors.textMuted}>COST    </text>
-            <text flexGrow={1} height={1} fg={colors.textMuted} paddingLeft={2}>PROJECT</text>
-            <text width={6} height={1} fg={colors.textMuted}>STATUS</text>
-          </box>
-          
-          <scrollbox ref={sessionsScrollboxRef} flexGrow={1}>
-            <box flexDirection="column">
-              {processedSessions.length === 0 && (
-                <box paddingLeft={1}>
-                  <text fg={colors.textMuted}>{isLoading ? 'Loading sessions...' : 'No sessions found'}</text>
-                </box>
-              )}
-              {processedSessions.map((session, idx) => {
-                const isSelected = idx === selectedRow;
-                const rowFg = isSelected ? colors.background : colors.text;
-                const primaryStream = session.streams[0];
-                const providerId = primaryStream?.providerId ?? 'unknown';
-                const modelId = primaryStream?.modelId ?? 'unknown';
-                const providerColor = getProviderColor(providerId);
-                const projectPath = session.projectPath ?? '—';
-                const repoName = projectPath === '—' 
-                  ? '—' 
-                  : projectPath.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? projectPath;
-                const projectDisplay = repoName.length > 20 ? repoName.slice(0, 19) + '…' : repoName;
-
-                return (
-                  <box 
-                    key={session.sessionId} 
-                    flexDirection="row" 
-                    paddingLeft={1} 
-                    paddingRight={1}
-                    height={1}
-                    {...(isSelected ? { backgroundColor: colors.primary } : {})}
-                  >
-                    <text width={8} height={1} fg={isSelected ? rowFg : colors.textMuted}>{session.sessionId.slice(0, 7)}</text>
-                    <text width={12} height={1} fg={isSelected ? rowFg : colors.textSubtle}>{session.agentName}</text>
-                    <text width={16} height={1} fg={isSelected ? rowFg : providerColor}>{modelId.split('/').pop()?.slice(0,15)}</text>
-                    <text width={8} height={1} fg={isSelected ? rowFg : colors.text}>{formatTokens(session.totals.input + session.totals.output).padStart(7)}</text>
-                    <text width={8} height={1} fg={isSelected ? rowFg : colors.success}>{formatCurrency(session.totalCostUsd ?? 0).padStart(7)}</text>
-                    <text flexGrow={1} height={1} fg={isSelected ? rowFg : colors.textSubtle} paddingLeft={2}>{projectDisplay}</text>
-                    <text 
-                      width={6} 
-                      height={1} 
-                      fg={isSelected 
-                        ? (session.status === 'active' ? '#ffffff' : rowFg)
-                        : (session.status === 'active' ? colors.success : colors.textMuted)}
-                    >
-                      {session.status === 'active' ? '●' : '○'}
-                    </text>
-                  </box>
-                );
-              })}
-            </box>
-          </scrollbox>
-        </box>
+        <SessionsTable
+          ref={sessionsScrollboxRef}
+          sessions={processedSessions}
+          selectedRow={selectedRow}
+          isLoading={isLoading}
+          isFiltering={isFiltering}
+          filterQuery={filterQuery}
+          focusedPanel={focusedPanel}
+          windowLabel={windowLabel}
+          getProviderColor={getProviderColor}
+        />
 
         {!sidebarCollapsed && (
-          <box 
-            flexDirection="column" 
-            width={35} 
-            gap={1}
-            border
-            borderStyle={focusedPanel === 'sidebar' ? "double" : "single"}
-            borderColor={focusedPanel === 'sidebar' ? colors.primary : colors.border}
-            overflow="hidden"
-          >
-            <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
-              <text height={1} fg={colors.textMuted} marginBottom={1}>MODEL BREAKDOWN</text>
-              {modelStats.map(([modelId, cost]) => (
-                <box key={modelId} flexDirection="column" marginBottom={1}>
-                  <box flexDirection="row" justifyContent="space-between" height={1}>
-                    <text height={1} fg={colors.text}>{(modelId.length > 15 ? modelId.slice(0,14)+'…' : modelId).padEnd(18)}</text>
-                    <text height={1} fg={colors.textMuted}>{formatCurrency(cost).padStart(7)}</text>
-                  </box>
-                  <box flexDirection="row" height={1}>
-                    <text height={1} fg={getProviderColor(modelId)}>
-                      {'█'.repeat(Math.ceil((cost / maxModelCost) * 20)).padEnd(20)}
-                    </text>
-                  </box>
-                </box>
-              ))}
-            </box>
-
-            <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
-               <text height={1} fg={colors.textMuted} marginBottom={1}>BY PROVIDER</text>
-               {providerStats.map(([provider, cost]) => (
-                 <box key={provider} flexDirection="row" justifyContent="space-between" height={1}>
-                   <text height={1} fg={getProviderColor(provider)}>{provider.padEnd(18)}</text>
-                   <text height={1} fg={colors.text}>{formatCurrency(cost).padStart(7)}</text>
-                 </box>
-               ))}
-            </box>
-          </box>
+          <SidebarBreakdown
+            sessions={agentSessions}
+            focusedPanel={focusedPanel}
+            getProviderColor={getProviderColor}
+          />
         )}
       </box>
       

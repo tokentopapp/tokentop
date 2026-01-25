@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { useColors } from '../contexts/ThemeContext.tsx';
+import { useStorageReady } from '../contexts/StorageContext.tsx';
+import { queryUsageTimeSeries, isDatabaseInitialized } from '@/storage/index.ts';
 
 type TimePeriod = '7d' | '30d' | '90d';
 
@@ -9,36 +11,63 @@ interface ChartPoint {
   value: number;
 }
 
-const generateMockData = (period: TimePeriod): ChartPoint[] => {
-  const points: ChartPoint[] = [];
-  const now = new Date();
-  
-  let count = 7;
-  if (period === '30d') count = 30;
-  if (period === '90d') count = 90;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-  let baseValue = 20 + Math.random() * 10;
-
-  for (let i = count - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    
-    const change = (Math.random() - 0.5) * 10;
-    baseValue = Math.max(5, Math.min(100, baseValue + change));
-
-    let label = '';
-    if (period === '7d') {
-      label = d.toLocaleDateString('en-US', { weekday: 'short' });
-    } else if (period === '30d') {
-      label = i % 5 === 0 ? d.getDate().toString() : ''; 
-    } else {
-      label = i % 15 === 0 ? `${d.getMonth()+1}/${d.getDate()}` : '';
-    }
-
-    points.push({ label, value: baseValue });
+function getTimeSeriesData(period: TimePeriod): ChartPoint[] {
+  if (!isDatabaseInitialized()) {
+    return [];
   }
-  return points;
-};
+
+  const now = Date.now();
+  let daysBack = 7;
+  let bucketMs = MS_PER_DAY;
+  
+  if (period === '30d') {
+    daysBack = 30;
+    bucketMs = MS_PER_DAY;
+  } else if (period === '90d') {
+    daysBack = 90;
+    bucketMs = MS_PER_DAY;
+  }
+
+  const startMs = now - (daysBack * MS_PER_DAY);
+  const endMs = now;
+  
+  try {
+    const timeSeries = queryUsageTimeSeries(startMs, endMs, bucketMs);
+    
+    const costByBucket = new Map<number, number>();
+    for (const point of timeSeries) {
+      costByBucket.set(point.bucketStart, point.costUsd);
+    }
+    
+    const points: ChartPoint[] = [];
+    for (let i = daysBack - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      
+      const bucketStart = d.getTime();
+      const cost = costByBucket.get(bucketStart) ?? 0;
+      
+      let label = '';
+      if (period === '7d') {
+        label = d.toLocaleDateString('en-US', { weekday: 'short' });
+      } else if (period === '30d') {
+        label = i % 5 === 0 ? d.getDate().toString() : '';
+      } else {
+        label = i % 15 === 0 ? `${d.getMonth() + 1}/${d.getDate()}` : '';
+      }
+      
+      points.push({ label, value: cost });
+    }
+    
+    return points;
+  } catch (err) {
+    console.error('Failed to query usage time series:', err);
+    return [];
+  }
+}
 
 // Symbols for rounded step chart
 // Up step: ─╯ (at y1) ... ╭─ (at y2)
@@ -176,10 +205,18 @@ const AsciiChart = ({ data, height, width, color, labelColor, gridColor }: Chart
 
 export function HistoricalTrendsView() {
   const colors = useColors();
+  const isStorageReady = useStorageReady();
   const [period, setPeriod] = useState<TimePeriod>('7d');
+  const [data, setData] = useState<ChartPoint[]>([]);
   
-  const data = useMemo(() => generateMockData(period), [period]);
+  useEffect(() => {
+    if (isStorageReady) {
+      setData(getTimeSeriesData(period));
+    }
+  }, [isStorageReady, period]);
+  
   const totalCost = useMemo(() => data.reduce((acc, p) => acc + p.value, 0), [data]);
+  const hasData = data.some(p => p.value > 0);
 
   useKeyboard((key) => {
     if (key.name === 'left') {
@@ -204,14 +241,23 @@ export function HistoricalTrendsView() {
       </box>
 
       <box flexGrow={1} flexDirection="column" justifyContent="center">
-          <AsciiChart 
-            data={data} 
-            height={12} 
-            width={65} 
-            color={colors.primary}
-            labelColor={colors.textMuted}
-            gridColor={colors.border}
-          />
+          {!isStorageReady ? (
+            <text fg={colors.textMuted}>Loading storage...</text>
+          ) : !hasData ? (
+            <box flexDirection="column" alignItems="center" gap={1}>
+              <text fg={colors.textMuted}>No usage data recorded yet.</text>
+              <text fg={colors.textSubtle}>Data will appear as you use AI providers.</text>
+            </box>
+          ) : (
+            <AsciiChart 
+              data={data} 
+              height={12} 
+              width={65} 
+              color={colors.primary}
+              labelColor={colors.textMuted}
+              gridColor={colors.border}
+            />
+          )}
       </box>
 
       <box flexDirection="row" marginTop={1} height={1}>

@@ -8,14 +8,16 @@ interface SidebarBreakdownProps {
   getProviderColor: (id: string) => string;
 }
 
+function formatCurrency(val: number): string {
+  return `$${val.toFixed(2)}`;
+}
+
 export function SidebarBreakdown({
   sessions,
   focusedPanel,
   getProviderColor,
 }: SidebarBreakdownProps) {
   const colors = useColors();
-  
-  const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
 
   const modelStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -40,12 +42,12 @@ export function SidebarBreakdown({
   const maxModelCost = Math.max(...modelStats.map(([, c]) => c), 0.01);
 
   return (
-    <box 
-      flexDirection="column" 
-      width={35} 
+    <box
+      flexDirection="column"
+      width={35}
       gap={1}
       border
-      borderStyle={focusedPanel === 'sidebar' ? "double" : "single"}
+      borderStyle={focusedPanel === 'sidebar' ? 'double' : 'single'}
       borderColor={focusedPanel === 'sidebar' ? colors.primary : colors.border}
       overflow="hidden"
     >
@@ -54,7 +56,7 @@ export function SidebarBreakdown({
         {modelStats.map(([modelId, cost]) => (
           <box key={modelId} flexDirection="column" marginBottom={1}>
             <box flexDirection="row" justifyContent="space-between" height={1}>
-              <text height={1} fg={colors.text}>{(modelId.length > 15 ? modelId.slice(0,14)+'…' : modelId).padEnd(18)}</text>
+              <text height={1} fg={colors.text}>{(modelId.length > 15 ? modelId.slice(0, 14) + '…' : modelId).padEnd(18)}</text>
               <text height={1} fg={colors.textMuted}>{formatCurrency(cost).padStart(7)}</text>
             </box>
             <box flexDirection="row" height={1}>
@@ -67,13 +69,13 @@ export function SidebarBreakdown({
       </box>
 
       <box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
-         <text height={1} fg={colors.textMuted} marginBottom={1}>BY PROVIDER</text>
-         {providerStats.map(([provider, cost]) => (
-           <box key={provider} flexDirection="row" justifyContent="space-between" height={1}>
-             <text height={1} fg={getProviderColor(provider)}>{provider.padEnd(18)}</text>
-             <text height={1} fg={colors.text}>{formatCurrency(cost).padStart(7)}</text>
-           </box>
-         ))}
+        <text height={1} fg={colors.textMuted} marginBottom={1}>BY PROVIDER</text>
+        {providerStats.map(([provider, cost]) => (
+          <box key={provider} flexDirection="row" justifyContent="space-between" height={1}>
+            <text height={1} fg={getProviderColor(provider)}>{provider.padEnd(18)}</text>
+            <text height={1} fg={colors.text}>{formatCurrency(cost).padStart(7)}</text>
+          </box>
+        ))}
       </box>
     </box>
   );
