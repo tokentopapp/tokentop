@@ -146,14 +146,35 @@ async function handleCommand(cmd: Command): Promise<Response> {
         if (!driver?.isRunning()) {
           return { ok: false, error: 'Driver not running' };
         }
-        const frame = await driver.capture();
+        const result = await driver.captureWithMeta();
         const dir = typeof cmd.dir === 'string' ? cmd.dir : DEFAULT_SNAPSHOTS_DIR;
         const name = typeof cmd.name === 'string' 
           ? cmd.name 
           : `frame-${String(++frameCounter).padStart(4, '0')}`;
-        const filePath = path.join(dir, `${name}.txt`);
-        const savedPath = await saveFrameToFile(frame, filePath);
-        return { ok: true, savedTo: savedPath, name };
+        
+        const framePath = path.join(dir, `${name}.txt`);
+        const metadataPath = path.join(dir, `${name}.json`);
+        
+        const metadata = {
+          timestamp: new Date(result.timestamp).toISOString(),
+          width: result.width,
+          height: result.height,
+          name,
+        };
+        
+        await ensureDir(dir);
+        await Promise.all([
+          fs.writeFile(framePath, result.frame, 'utf-8'),
+          fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8'),
+        ]);
+        
+        return { 
+          ok: true, 
+          savedTo: path.resolve(framePath), 
+          metadataPath: path.resolve(metadataPath),
+          name,
+          metadata,
+        };
       }
 
       case 'waitForText': {
