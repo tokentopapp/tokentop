@@ -368,3 +368,162 @@ function createMockMyComponentProps() {
 3. Component is now available: `bun src/tui/debug/snapshot.tsx my-component`
 
 See `docs/debugging.md` for comprehensive documentation.
+
+## TUI Driver (Headless Automation)
+
+The TUI driver allows AI agents to control tokentop programmatically without a real terminal. Use it for automated testing, capturing screenshots, or verifying UI behavior.
+
+### CLI vs Programmatic
+
+| Approach | When to Use |
+|----------|-------------|
+| **CLI** (pipe JSON) | Simple linear workflows, quick captures, CI/CD pipelines, any language |
+| **Programmatic** (TypeScript) | Conditional logic, loops, assertions, frame parsing, building tools |
+
+### CLI Usage
+
+Pipe JSON commands to stdin. Each command executes sequentially.
+
+```bash
+echo '{"action":"launch","width":80,"height":24}
+{"action":"waitForStable"}
+{"action":"pressKey","key":"5"}
+{"action":"waitForStable"}
+{"action":"snapshot","name":"settings-view"}
+{"action":"close"}' | bun run driver 2>/dev/null
+```
+
+**Critical**: Always use `{"action":"waitForStable"}` after navigation. Commands execute faster than the UI renders.
+
+#### Available Actions
+
+| Action | Parameters | Description |
+|--------|------------|-------------|
+| `launch` | `width`, `height`, `debug` | Start the app |
+| `close` | - | Stop the app |
+| `pressKey` | `key`, `modifiers` | Press a single key |
+| `pressTab` | - | Press Tab |
+| `pressEnter` | - | Press Enter |
+| `pressEscape` | - | Press Escape |
+| `pressArrow` | `direction` (up/down/left/right) | Press arrow key |
+| `typeText` | `text`, `delay` | Type a string |
+| `sendKeys` | `keys` | Send key sequence |
+| `capture` | `meta`, `save` | Get current frame |
+| `snapshot` | `name`, `dir` | Save frame to file |
+| `waitForStable` | `maxIterations`, `intervalMs` | Wait for UI to settle |
+| `waitForText` | `text`, `timeout` | Wait for text to appear |
+| `resize` | `cols`, `rows` | Resize terminal |
+| `status` | - | Get driver status |
+| `help` | - | List all commands |
+
+### Programmatic Usage
+
+```typescript
+import { createDriver } from './src/tui/driver/driver.ts';
+
+const driver = await createDriver({ width: 80, height: 24 });
+await driver.launch();
+await driver.waitForStable();
+
+// Navigate to settings
+await driver.pressKey('5');
+await driver.waitForStable();
+
+// Capture and analyze frame
+const frame = await driver.capture();
+if (frame.includes('ALERTS')) {
+  console.log('Found alerts section');
+}
+
+await driver.close();
+```
+
+### Example: Capture Alerts Settings (CLI)
+
+```bash
+echo '{"action":"launch","width":80,"height":24}
+{"action":"waitForStable"}
+{"action":"pressKey","key":"5"}
+{"action":"waitForStable"}
+{"action":"pressTab"}
+{"action":"waitForStable"}
+{"action":"pressArrow","direction":"down"}
+{"action":"waitForStable"}
+{"action":"pressArrow","direction":"down"}
+{"action":"waitForStable"}
+{"action":"pressArrow","direction":"down"}
+{"action":"waitForStable"}
+{"action":"snapshot","name":"alerts-settings"}
+{"action":"close"}' | bun run driver 2>/dev/null
+```
+
+Settings opens with focus on settings pane. Tab switches to categories pane. Arrow down 3 times: Refresh → Display → Budgets → Alerts.
+
+### Example: Filter Dashboard by Model (CLI)
+
+```bash
+echo '{"action":"launch","width":80,"height":24}
+{"action":"waitForStable"}
+{"action":"pressKey","key":"t"}
+{"action":"pressKey","key":"t"}
+{"action":"pressKey","key":"t"}
+{"action":"pressKey","key":"t"}
+{"action":"waitForStable"}
+{"action":"pressKey","key":"/"}
+{"action":"waitForStable"}
+{"action":"typeText","text":"opus"}
+{"action":"waitForStable"}
+{"action":"snapshot","name":"dashboard-7d-opus"}
+{"action":"close"}' | bun run driver 2>/dev/null
+```
+
+Press `t` 4 times to cycle to 7d window. Press `/` for filter mode. Type query.
+
+### Example: Conditional Logic (Programmatic)
+
+```typescript
+import { createDriver } from './src/tui/driver/driver.ts';
+
+async function checkSessionCount(query: string): Promise<number> {
+  const driver = await createDriver({ width: 100, height: 30 });
+  await driver.launch();
+  await driver.waitForStable();
+  
+  await driver.pressKey('/');
+  await driver.waitForStable();
+  await driver.typeText(query);
+  await driver.waitForStable();
+  
+  const frame = await driver.capture();
+  const match = frame.match(/\[.*\] (\d+) sessions?/);
+  const count = match ? parseInt(match[1], 10) : 0;
+  
+  await driver.close();
+  return count;
+}
+
+const opusSessions = await checkSessionCount('opus');
+console.log(`Found ${opusSessions} opus sessions`);
+```
+
+### Keyboard Reference
+
+**Global**: `1-5` switch views, `q` quit, `r` refresh, `~` debug console
+
+**Dashboard**: `t` cycle time window, `/` or `f` filter, `s` sort, `v` toggle view, `↑↓` navigate
+
+**Settings**: `Tab` switch panes, `↑↓` navigate, `←→` adjust values, `Enter` toggle
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Blank/incomplete frames | Add `waitForStable` after navigation |
+| Commands ignored | Increase `maxIterations` in waitForStable |
+| React act() warnings | Redirect stderr: `2>/dev/null` |
+
+### File Locations
+
+- Driver: `src/tui/driver/driver.ts`
+- CLI: `src/tui/driver/cli.ts`
+- Snapshots: `./snapshots/`
