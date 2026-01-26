@@ -81,13 +81,19 @@ export function useDashboardKeyboard({
   const modalOpenRef = useRef(false);
   const pendingGRef = useRef(false);
   const sessionsRef = useRef(processedSessions);
+  const focusedPanelRef = useRef(state.focusedPanel);
+  const providerCountRef = useRef(state.providerCount);
+  const filterQueryRef = useRef(state.filterQuery);
 
   useEffect(() => {
     isFilteringRef.current = state.isFiltering;
     modalOpenRef.current = state.showHelp || state.showSessionDrawer;
     pendingGRef.current = state.pendingG;
     sessionsRef.current = processedSessions;
-  }, [state.isFiltering, state.showHelp, state.showSessionDrawer, state.pendingG, processedSessions]);
+    focusedPanelRef.current = state.focusedPanel;
+    providerCountRef.current = state.providerCount;
+    filterQueryRef.current = state.filterQuery;
+  }, [state.isFiltering, state.showHelp, state.showSessionDrawer, state.pendingG, processedSessions, state.focusedPanel, state.providerCount, state.filterQuery]);
 
   const { isInputFocused } = useInputFocus();
 
@@ -160,7 +166,7 @@ export function useDashboardKeyboard({
       return;
     }
 
-    if (key.name === 'l') {
+    if (key.name === 'l' && focusedPanelRef.current !== 'limits') {
       actions.setFocusedPanel(() => 'limits');
       return;
     }
@@ -182,7 +188,7 @@ export function useDashboardKeyboard({
     }
 
     // Clear applied filter with Escape (when not in typing mode)
-    if (key.name === 'escape' && state.filterQuery) {
+    if (key.name === 'escape' && filterQueryRef.current) {
       actions.setFilterQuery(() => '');
       return;
     }
@@ -197,7 +203,7 @@ export function useDashboardKeyboard({
       return;
     }
 
-    if (state.focusedPanel === 'sessions') {
+    if (focusedPanelRef.current === 'sessions') {
       const sessions = sessionsRef.current;
       if (key.name === 'down' || key.name === 'j') {
         actions.setPendingG(false);
@@ -225,14 +231,18 @@ export function useDashboardKeyboard({
       }
     }
 
-    if (state.focusedPanel === 'limits') {
-      const maxIndex = Math.max(0, state.providerCount - 1);
+    if (focusedPanelRef.current === 'limits') {
+      const maxIndex = Math.max(0, providerCountRef.current - 1);
       if (key.name === 'left' || key.name === 'h') {
         actions.setLimitSelectedIndex(curr => Math.max(curr - 1, 0));
+        return;
       } else if (key.name === 'right' || key.name === 'l') {
         actions.setLimitSelectedIndex(curr => Math.min(curr + 1, maxIndex));
+        return;
       } else if (key.name === 'escape') {
         actions.setFocusedPanel(() => 'sessions');
+        actions.setLimitSelectedIndex(() => 0);
+        return;
       }
     }
   });
