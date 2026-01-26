@@ -1,97 +1,171 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
-export interface EmaActivityState {
-  rate: number;
-  ema: number;
+const BUCKET_COUNT = 60;
+const AVG_WINDOW = 10;
+
+export interface ActivityState {
+  instantRate: number;
+  avgRate: number;
   isSpike: boolean;
 }
 
-export interface EmaDebugData {
+export interface ActivityDebugData {
   lastDeltaTokens: number;
-  lastRateTps: number;
   lastDt: number;
+  bucketsShifted: number;
+  currentBucketValue: number;
   refreshCount: number;
   lastRefreshTime: number;
 }
 
-export interface UseEmaActivityResult {
-  activity: EmaActivityState;
+export interface UseActivityRateResult {
+  activity: ActivityState;
   sparkData: number[];
-  emaRef: React.MutableRefObject<{ lastTokens: number; lastTime: number; ema: number }>;
-  debugDataRef: React.MutableRefObject<EmaDebugData>;
+  debugDataRef: React.MutableRefObject<ActivityDebugData>;
 }
 
 /**
- * Hook for calculating exponential moving average of token activity.
- * Tracks token rate over time and detects spikes.
+ * Token activity tracker using time-bucketed rates.
+ * 
+ * - When tokens arrive: calculate rate = deltaTokens/dt, put in current bucket
+ * - Timer shifts buckets left every second, fills zeros for idle time
+ * - instantRate = avg of last 3 buckets, avgRate = avg of last 10
  */
-export function useEmaActivity(totalTokens: number): UseEmaActivityResult {
-  const [sparkData, setSparkData] = useState<number[]>([]);
-  const [activity, setActivity] = useState<EmaActivityState>({ 
-    rate: 0, ema: 0, isSpike: false 
+export function useEmaActivity(totalTokens: number): UseActivityRateResult {
+  const [buckets, setBuckets] = useState<number[]>(() => Array(BUCKET_COUNT).fill(0));
+  const [activity, setActivity] = useState<ActivityState>({ 
+    instantRate: 0, avgRate: 0, isSpike: false 
   });
   
-  const emaRef = useRef<{ lastTokens: number; lastTime: number; ema: number }>({ 
-    lastTokens: -1, lastTime: Date.now(), ema: 0 
+  const stateRef = useRef<{ 
+    lastTokens: number; 
+    lastTokenTime: number;
+    lastShiftTime: number;
+  }>({ 
+    lastTokens: -1, 
+    lastTokenTime: Date.now(),
+    lastShiftTime: Date.now(),
   });
   
-  const debugDataRef = useRef<EmaDebugData>({
+  const debugDataRef = useRef<ActivityDebugData>({
     lastDeltaTokens: 0,
-    lastRateTps: 0,
     lastDt: 0,
+    bucketsShifted: 0,
+    currentBucketValue: 0,
     refreshCount: 0,
     lastRefreshTime: Date.now(),
   });
 
-  useEffect(() => {
-    setSparkData(Array.from({ length: 60 }, () => 0));
+  const calculateRates = useCallback((bucketData: number[]) => {
+    const recentBuckets = bucketData.slice(-AVG_WINDOW);
+    
+    const instantRate = Math.max(...recentBuckets);
+    const avgRate = recentBuckets.reduce((a, b) => a + b, 0) / AVG_WINDOW;
+    
+    const isSpike = instantRate >= 120 && instantRate >= avgRate * 3;
+    
+    return { instantRate, avgRate, isSpike };
+  }, []);
+
+  const shiftBuckets = useCallback((bucketData: number[], count: number): number[] => {
+    if (count <= 0) return bucketData;
+    const newBuckets = [...bucketData];
+    const shift = Math.min(count, BUCKET_COUNT);
+    for (let i = 0; i < BUCKET_COUNT - shift; i++) {
+      newBuckets[i] = bucketData[i + shift] ?? 0;
+    }
+    for (let i = BUCKET_COUNT - shift; i < BUCKET_COUNT; i++) {
+      newBuckets[i] = 0;
+    }
+    return newBuckets;
   }, []);
 
   useEffect(() => {
-    const currentTime = Date.now();
+    const now = Date.now();
     
     debugDataRef.current.refreshCount++;
-    debugDataRef.current.lastRefreshTime = currentTime;
+    debugDataRef.current.lastRefreshTime = now;
 
-    if (emaRef.current.lastTokens === -1) {
-      emaRef.current = { lastTokens: totalTokens, lastTime: currentTime, ema: 0 };
+    const prevTokens = stateRef.current.lastTokens;
+    
+    if (prevTokens === -1 || prevTokens === 0) {
+      stateRef.current = { 
+        lastTokens: totalTokens, 
+        lastTokenTime: now,
+        lastShiftTime: now,
+      };
       return;
     }
 
-    const prevTokens = emaRef.current.lastTokens;
     const deltaTokens = Math.max(0, totalTokens - prevTokens);
-    const dt = (currentTime - emaRef.current.lastTime) / 1000;
+    const dt = Math.max((now - stateRef.current.lastTokenTime) / 1000, 0.1);
     
     debugDataRef.current.lastDeltaTokens = deltaTokens;
     debugDataRef.current.lastDt = dt;
-    
-    if (deltaTokens > 0) {
-      const rateTps = dt > 0 ? deltaTokens / dt : 0;
-      const alpha = 2 / (10 + 1);
-      const newEma = alpha * rateTps + (1 - alpha) * emaRef.current.ema;
-      const isSpike = rateTps >= Math.max(800, newEma * 2) && (rateTps - newEma) >= 200;
+
+    if (deltaTokens > 0 && deltaTokens < 100000) {
+      const rate = deltaTokens / dt;
+      debugDataRef.current.currentBucketValue = rate;
       
-      debugDataRef.current.lastRateTps = rateTps;
-      emaRef.current.ema = newEma;
-      setActivity({ rate: rateTps, ema: newEma, isSpike });
+      setBuckets(prev => {
+        const secSinceShift = (now - stateRef.current.lastShiftTime) / 1000;
+        const bucketsToShift = Math.floor(secSinceShift);
+        
+        let newBuckets = shiftBuckets(prev, bucketsToShift);
+        if (bucketsToShift > 0) {
+          stateRef.current.lastShiftTime = now;
+          debugDataRef.current.bucketsShifted = bucketsToShift;
+        }
+        
+        // Distribute rate across the active window to avoid spikes
+        if (bucketsToShift > 0) {
+          // If we shifted buckets, fill the new ones with the average rate
+          // This smooths out the graph when polling interval > 1s
+          const fillCount = Math.min(bucketsToShift, BUCKET_COUNT);
+          for (let i = 0; i < fillCount; i++) {
+            newBuckets[BUCKET_COUNT - 1 - i] = rate;
+          }
+        } else {
+          // If sub-second update, accumulate rate
+          newBuckets[BUCKET_COUNT - 1] = (newBuckets[BUCKET_COUNT - 1] ?? 0) + rate;
+        }
+        
+        const rates = calculateRates(newBuckets);
+        setActivity(rates);
+        return newBuckets;
+      });
     }
     
-    emaRef.current.lastTokens = totalTokens;
-    emaRef.current.lastTime = currentTime;
-  }, [totalTokens]);
+    stateRef.current.lastTokens = totalTokens;
+    stateRef.current.lastTokenTime = now;
+  }, [totalTokens, calculateRates, shiftBuckets]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const alpha = 2 / (10 + 1);
-      const decayedEma = (1 - alpha) * emaRef.current.ema;
-      emaRef.current.ema = decayedEma;
+      const now = Date.now();
+      const secSinceShift = (now - stateRef.current.lastShiftTime) / 1000;
       
-      setActivity(prev => ({ ...prev, ema: decayedEma, isSpike: false }));
-      setSparkData(d => [...d.slice(1), Math.min(100, Math.round(decayedEma / 10))]);
+      if (secSinceShift >= 1) {
+        const bucketsToShift = Math.floor(secSinceShift);
+        debugDataRef.current.bucketsShifted = bucketsToShift;
+        
+        setBuckets(prev => {
+          const newBuckets = shiftBuckets(prev, bucketsToShift);
+          stateRef.current.lastShiftTime = now;
+          
+          const rates = calculateRates(newBuckets);
+          setActivity(rates);
+          return newBuckets;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [calculateRates, shiftBuckets]);
 
-  return { activity, sparkData, emaRef, debugDataRef };
+  return { 
+    activity, 
+    sparkData: buckets,
+    debugDataRef,
+  };
 }

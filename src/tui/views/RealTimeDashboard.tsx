@@ -23,7 +23,7 @@ export function RealTimeDashboard() {
   const { windowMs, windowLabel } = useTimeWindow();
   const { height: terminalHeight, width: terminalWidth } = useTerminalDimensions();
   const { config } = useConfig();
-  const { activity, sparkData, deltas, emaRef, debugDataRef } = useDashboardRuntime();
+  const { activity, sparkData, deltas, debugDataRef } = useDashboardRuntime();
 
   const showProviderLimits = terminalHeight >= 30;
   const showLargeHeader = terminalHeight >= 35;
@@ -191,7 +191,6 @@ export function RealTimeDashboard() {
       {showDebugInspector && (
         <DebugInspectorOverlay 
           sessions={agentSessions}
-          emaData={emaRef.current}
           debugData={debugDataRef.current}
           activity={activity}
           sparkData={sparkData}

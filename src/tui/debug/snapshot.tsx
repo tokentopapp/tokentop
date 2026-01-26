@@ -39,6 +39,7 @@ import { Toast } from '../components/Toast.tsx';
 import { Spinner } from '../components/Spinner.tsx';
 import { SkeletonText, SkeletonGauge, SkeletonProviderContent } from '../components/Skeleton.tsx';
 import { DebugConsole } from '../components/DebugConsole.tsx';
+import { KpiStrip } from '../components/KpiStrip.tsx';
 import { HistoricalTrendsView } from '../views/HistoricalTrendsView.tsx';
 import { ProjectsView } from '../views/ProjectsView.tsx';
 import { SettingsView } from '../views/SettingsView.tsx';
@@ -50,6 +51,7 @@ import { PluginProvider } from '../contexts/PluginContext.tsx';
 import { ToastProvider } from '../contexts/ToastContext.tsx';
 import { ConfigProvider } from '../contexts/ConfigContext.tsx';
 import { DEFAULT_CONFIG } from '@/config/schema.ts';
+import { createDriver } from '../driver/driver.ts';
 
 function createMockDebugInspectorProps(): DebugInspectorProps {
   const now = Date.now();
@@ -77,21 +79,17 @@ function createMockDebugInspectorProps(): DebugInspectorProps {
         lastActivityAt: now - 30000,
       },
     ],
-    emaData: {
-      lastTokens: 19134,
-      lastTime: now - 3000,
-      ema: 42.5,
-    },
     debugData: {
       lastDeltaTokens: 150,
-      lastRateTps: 50.0,
       lastDt: 3.0,
+      bucketsShifted: 3,
+      currentBucketValue: 50.0,
       refreshCount: 15,
       lastRefreshTime: now - 1500,
     },
     activity: {
-      rate: 50.0,
-      ema: 42.5,
+      instantRate: 50.0,
+      avgRate: 42.5,
       isSpike: false,
     },
     sparkData: [10, 20, 30, 25, 40, 35, 50, 45, 60, 55, 70, 65, 80, 75, 90],
@@ -225,6 +223,36 @@ function createMockToastWarningProps() {
   };
 }
 
+function createMockKpiStripProps() {
+  const now = Date.now();
+  return {
+    totalCost: 12.43,
+    totalTokens: 48250,
+    totalRequests: 128,
+    activeCount: 3,
+    deltaCost: 3.12,
+    deltaTokens: 12450,
+    windowSec: 300,
+    activity: {
+      instantRate: 48,
+      avgRate: 32,
+      isSpike: false,
+    },
+    sparkData: [
+      4, 6, 8, 12, 18, 22, 28, 36, 32, 40, 44, 48, 52, 48, 44, 40, 36, 32,
+      28, 24, 22, 20, 18, 16, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54,
+    ],
+    budget: {
+      daily: 25,
+      weekly: null,
+      monthly: null,
+      warningPercent: 80,
+      criticalPercent: 90,
+    },
+    lastRefreshAt: now - 30000,
+  };
+}
+
 function createMockSpinnerProps() {
   return {
     color: '#7C3AED',
@@ -351,6 +379,13 @@ const COMPONENT_REGISTRY: Record<string, ComponentEntry> = {
     defaultWidth: 100,
     defaultHeight: 20,
     render: () => <DebugConsole height={15} follow={true} />,
+  },
+  'kpi-strip': {
+    name: 'KpiStrip',
+    description: 'KPI strip with activity sparkline ramp',
+    defaultWidth: 120,
+    defaultHeight: 6,
+    render: () => <KpiStrip {...createMockKpiStripProps()} />,
   },
   'historical-trends': {
     name: 'HistoricalTrendsView',
@@ -495,8 +530,17 @@ async function snapshotComponent(
   const finalWidth = width ?? entry.defaultWidth;
   const finalHeight = height ?? entry.defaultHeight;
 
+  if (componentId === 'kpi-strip') {
+    const driver = await createDriver({ width: finalWidth, height: finalHeight });
+    await driver.launch();
+    await driver.waitForStable();
+    const frame = await driver.capture();
+    await driver.close();
+    return frame;
+  }
+
   const element = entry.render();
-  
+
   const wrappedElement = (
     <ThemeProvider>
       <LogProvider>

@@ -8,29 +8,23 @@ export interface DebugInspectorSession {
   lastActivityAt: number;
 }
 
-export interface DebugInspectorEmaData {
-  lastTokens: number;
-  lastTime: number;
-  ema: number;
-}
-
 export interface DebugInspectorDebugData {
   lastDeltaTokens: number;
-  lastRateTps: number;
   lastDt: number;
+  bucketsShifted: number;
+  currentBucketValue: number;
   refreshCount: number;
   lastRefreshTime: number;
 }
 
 export interface DebugInspectorActivity {
-  rate: number;
-  ema: number;
+  instantRate: number;
+  avgRate: number;
   isSpike: boolean;
 }
 
 export interface DebugInspectorProps {
   sessions: DebugInspectorSession[];
-  emaData: DebugInspectorEmaData;
   debugData: DebugInspectorDebugData;
   activity: DebugInspectorActivity;
   sparkData: number[];
@@ -40,7 +34,7 @@ function padRight(str: string, len: number): string {
   return str.length >= len ? str.slice(0, len) : str + ' '.repeat(len - str.length);
 }
 
-export function DebugInspectorOverlay({ sessions, emaData, debugData, activity, sparkData }: DebugInspectorProps) {
+export function DebugInspectorOverlay({ sessions, debugData, activity, sparkData }: DebugInspectorProps) {
   const colors = useColors();
   
   const totalTokens = sessions.reduce((sum, s) => sum + s.totals.input + s.totals.output, 0);
@@ -68,21 +62,19 @@ export function DebugInspectorOverlay({ sessions, emaData, debugData, activity, 
       
       <box flexDirection="row" gap={2} marginTop={1} height={10}>
         <box flexDirection="column" flexGrow={1} border borderColor={colors.border} padding={1} overflow="hidden">
-          <text height={1} fg={colors.primary}>{padRight('EMA Internals', 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('lastTokens: ' + emaData.lastTokens.toLocaleString(), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('lastTime:   ' + new Date(emaData.lastTime).toLocaleTimeString(), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('ema:        ' + emaData.ema.toFixed(2), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('deltaTokens:' + debugData.lastDeltaTokens.toLocaleString(), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('dt:         ' + debugData.lastDt.toFixed(3) + 's', 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('rateTps:    ' + debugData.lastRateTps.toFixed(1), 36)}</text>
+          <text height={1} fg={colors.primary}>{padRight('Bucket Data', 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('deltaTokens: ' + debugData.lastDeltaTokens.toLocaleString(), 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('dt:          ' + debugData.lastDt.toFixed(3) + 's', 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('shifted:     ' + debugData.bucketsShifted, 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('currBucket:  ' + debugData.currentBucketValue.toFixed(1), 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('buckets[5]:  [' + sparkData.slice(-5).map(v => v.toFixed(0)).join(',') + ']', 36)}</text>
         </box>
         
         <box flexDirection="column" flexGrow={1} border borderColor={colors.border} padding={1} overflow="hidden">
           <text height={1} fg={colors.primary}>{padRight('Activity State', 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('rate:    ' + (activity.rate || 0).toFixed(1), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('ema:     ' + (activity.ema || 0).toFixed(1), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('isSpike: ' + (activity.isSpike ? 'YES' : 'no'), 36)}</text>
-          <text height={1} fg={colors.textMuted}>{padRight('spark[5]:' + '[' + sparkData.slice(-5).join(',') + ']', 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('instantRate: ' + (activity.instantRate || 0).toFixed(1) + '/s', 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('avgRate:     ' + (activity.avgRate || 0).toFixed(1) + '/s', 36)}</text>
+          <text height={1} fg={colors.textMuted}>{padRight('isSpike:     ' + (activity.isSpike ? 'YES' : 'no'), 36)}</text>
         </box>
         
         <box flexDirection="column" flexGrow={1} border borderColor={colors.border} padding={1} overflow="hidden">

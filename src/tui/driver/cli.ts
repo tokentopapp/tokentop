@@ -67,6 +67,11 @@ async function handleCommand(cmd: Command): Promise<Response> {
           height: currentHeight,
           appOptions: {
             debug: cmd.debug === true,
+            demoMode: cmd.demo === true,
+            ...(typeof cmd.demoSeed === 'number' ? { demoSeed: cmd.demoSeed, demoMode: true } : {}),
+            ...(typeof cmd.demoPreset === 'string' && ['light', 'normal', 'heavy'].includes(cmd.demoPreset)
+              ? { demoPreset: cmd.demoPreset as 'light' | 'normal' | 'heavy', demoMode: true }
+              : {}),
           },
         };
         driver = await createDriver(options);
@@ -555,7 +560,7 @@ async function handleCommand(cmd: Command): Promise<Response> {
         return {
           ok: true,
           commands: [
-            'launch - Start the app (options: width, height, debug)',
+            'launch - Start the app (options: width, height, debug; demo mode: demo, demoSeed, demoPreset)',
             'close - Stop the app',
             'sendKeys - Send key sequence (options: keys)',
             'pressKey - Press single key (options: key, modifiers)',
@@ -620,16 +625,19 @@ JSON-line Protocol:
   One command per line.
 
 Commands:
-  {"action":"launch","width":100,"height":30}     Launch app
-  {"action":"capture"}                             Get current frame
-  {"action":"capture","save":"./frame.txt"}        Capture and save to file
-  {"action":"snapshot","name":"dashboard"}         Save snapshot to ./snapshots/
-  {"action":"sendKeys","keys":"jj"}               Send keystrokes
-  {"action":"pressKey","key":"1"}                 Switch to view 1
-  {"action":"waitForText","text":"Dashboard"}     Wait for text
-  {"action":"resize","cols":120,"rows":40}        Resize terminal
-  {"action":"close"}                              Stop app
-  {"action":"help"}                               List all commands
+  {"action":"launch","width":100,"height":30}                    Launch app
+  {"action":"launch","demo":true}                                Launch in demo mode
+  {"action":"launch","demo":true,"demoSeed":42}                  Launch demo with seed
+  {"action":"launch","demo":true,"demoPreset":"heavy"}           Launch demo with preset
+  {"action":"capture"}                                           Get current frame
+  {"action":"capture","save":"./frame.txt"}                      Capture and save to file
+  {"action":"snapshot","name":"dashboard"}                       Save snapshot to ./snapshots/
+  {"action":"sendKeys","keys":"jj"}                             Send keystrokes
+  {"action":"pressKey","key":"1"}                               Switch to view 1
+  {"action":"waitForText","text":"Dashboard"}                   Wait for text
+  {"action":"resize","cols":120,"rows":40}                      Resize terminal
+  {"action":"close"}                                            Stop app
+  {"action":"help"}                                             List all commands
 
 Example:
   echo '{"action":"launch"}' | bun src/tui/driver/cli.ts

@@ -3,6 +3,7 @@ import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { useToastContext } from '../contexts/ToastContext.tsx';
 import { useConfig } from '../contexts/ConfigContext.tsx';
+import { useDemoMode } from '../contexts/DemoModeContext.tsx';
 import { type AppConfig } from '@/config/schema.ts';
 
 type SettingCategory = 'refresh' | 'display' | 'budgets' | 'alerts' | 'notifications';
@@ -192,6 +193,7 @@ export function SettingsView() {
   const colors = useColors();
   const { showToast } = useToastContext();
   const { config, isLoading, updateConfig, resetToDefaults, saveNow } = useConfig();
+  const { demoMode, seed, preset } = useDemoMode();
   const { width: terminalWidth } = useTerminalDimensions();
   
   const [selectedCategory, setSelectedCategory] = useState<SettingCategory>('refresh');
@@ -310,6 +312,14 @@ export function SettingsView() {
   
   return (
     <box flexDirection="column" flexGrow={1} padding={1} gap={1}>
+      {demoMode && (
+        <box flexDirection="row" height={1} paddingLeft={1} gap={2}>
+          <text fg={colors.warning}>DEMO MODE</text>
+          <text fg={colors.textMuted}>
+            Seed: {seed ?? 'default'} | Preset: {preset ?? 'normal'}
+          </text>
+        </box>
+      )}
       <box flexDirection="row" gap={1} flexGrow={1}>
         <box 
           flexDirection="column" 

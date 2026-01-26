@@ -5,9 +5,10 @@ interface StatusBarProps {
   lastRefresh?: number;
   nextRefresh?: number;
   message?: string;
+  demoMode?: boolean;
 }
 
-export function StatusBar({ lastRefresh, nextRefresh, message }: StatusBarProps) {
+export function StatusBar({ lastRefresh, nextRefresh, message, demoMode = false }: StatusBarProps) {
   const colors = useColors();
   const [, setTick] = useState(0);
 
@@ -38,7 +39,7 @@ export function StatusBar({ lastRefresh, nextRefresh, message }: StatusBarProps)
       height={1}
     >
       <text fg={colors.textMuted}>
-        {message ?? 'tokentop - htop for AI usage'}
+        {demoMode ? 'tokentop - DEMO MODE' : (message ?? 'tokentop - htop for AI usage')}
       </text>
       <box flexDirection="row" gap={2}>
         {lastRefreshText && <text fg={colors.textSubtle}>{lastRefreshText}</text>}

@@ -16,6 +16,7 @@ export function Sparkline({
   thresholds = { warning: 800, error: 2000 },
 }: SparklineProps) {
   const colors = useColors();
+  // Standard block elements for smooth ramp: 1/8 to Full
   const chars = ['▁', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
   
   const peak = Math.max(...data);

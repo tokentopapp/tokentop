@@ -29,10 +29,15 @@ import { CommandPalette, type CommandAction } from './components/CommandPalette.
 import { copyToClipboard } from '@/utils/clipboard.ts';
 import { useSafeRenderer } from './hooks/useSafeRenderer.ts';
 import type { ThemePlugin } from '@/plugins/types/theme.ts';
+import type { DemoPreset } from '@/demo/simulator.ts';
+import { DemoModeProvider, useDemoMode } from './contexts/DemoModeContext.tsx';
 
 interface AppProps {
   initialTheme?: ThemePlugin;
   debug?: boolean;
+  demoMode?: boolean;
+  demoSeed?: number;
+  demoPreset?: DemoPreset;
 }
 
 type View = 'dashboard' | 'providers' | 'trends' | 'projects' | 'settings';
@@ -45,6 +50,7 @@ function AppContent() {
   const { toast, showToast, dismissToast } = useToastContext();
   const { isInputFocused } = useInputFocus();
   const { config } = useConfig();
+  const { demoMode } = useDemoMode();
   const { selectedSession, hideDrawer, isOpen: isDrawerOpen } = useDrawer();
   
   const refreshInterval = config.refresh.pauseAutoRefresh ? 0 : config.refresh.intervalMs;
@@ -287,6 +293,7 @@ function AppContent() {
       <Header 
         {...(isConsoleOpen ? { subtitle: '(debug)' } : {})} 
         activeView={activeView}
+        demoMode={demoMode}
       />
       
       {isConsoleOpen ? (
@@ -305,6 +312,7 @@ function AppContent() {
         lastRefresh={lastRefresh ?? 0}
         nextRefresh={lastRefresh ? lastRefresh + refreshInterval : 0}
         {...(statusMessage ? { message: statusMessage } : {})}
+        demoMode={demoMode}
       />
 
       {toast && config.notifications.toastsEnabled && (
@@ -356,20 +364,25 @@ function ConfiguredApp() {
   );
 }
 
-export function App({ initialTheme, debug = false }: AppProps) {
+export function App({ initialTheme, debug = false, demoMode = false, demoSeed, demoPreset }: AppProps) {
   const themeProviderProps = initialTheme ? { initialTheme } : {};
+  const demoProviderProps: { demoMode: boolean; demoSeed?: number; demoPreset?: DemoPreset } = { demoMode };
+  if (demoSeed !== undefined) demoProviderProps.demoSeed = demoSeed;
+  if (demoPreset !== undefined) demoProviderProps.demoPreset = demoPreset;
 
   return (
-    <LogProvider debugEnabled={debug}>
-      <InputProvider>
-        <StorageProvider>
-          <ThemeProvider {...themeProviderProps}>
-            <ConfigProvider>
-              <ConfiguredApp />
-            </ConfigProvider>
-          </ThemeProvider>
-        </StorageProvider>
-      </InputProvider>
-    </LogProvider>
+    <DemoModeProvider {...demoProviderProps}>
+      <LogProvider debugEnabled={debug}>
+        <InputProvider>
+          <StorageProvider>
+            <ThemeProvider {...themeProviderProps}>
+              <ConfigProvider>
+                <ConfiguredApp />
+              </ConfigProvider>
+            </ThemeProvider>
+          </StorageProvider>
+        </InputProvider>
+      </LogProvider>
+    </DemoModeProvider>
   );
 }

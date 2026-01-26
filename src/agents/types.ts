@@ -33,6 +33,7 @@ export interface AgentSessionAggregate {
   projectPath?: string;
   startedAt: number;
   lastActivityAt: number;
+  endedAt?: number;
   status: 'active' | 'idle';
   totals: TokenCounts;
   totalCostUsd?: number;

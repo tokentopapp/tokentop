@@ -8,6 +8,8 @@ import { createSandboxedHttpClient, createPluginLogger } from '@/plugins/sandbox
 import { useLogs } from './LogContext.tsx';
 import { useStorage } from './StorageContext.tsx';
 import type { ProviderSnapshotInsert } from '@/storage/types.ts';
+import { useDemoMode } from './DemoModeContext.tsx';
+import type { Credentials } from '@/plugins/types/provider.ts';
 
 export interface UsageSnapshot {
   timestamp: number;
@@ -72,6 +74,7 @@ export function PluginProvider({ children }: PluginProviderProps) {
   const [providers, setProviders] = useState<Map<string, ProviderState>>(new Map());
   const [themes, setThemes] = useState<ThemePlugin[]>([]);
   const [notifications, setNotifications] = useState<NotificationPlugin[]>([]);
+  const { demoMode, simulator } = useDemoMode();
   const { debug, info, warn, error: logError } = useLogs();
   const { isReady: storageReady, recordProviderSnapshots } = useStorage();
 
@@ -80,7 +83,11 @@ export function PluginProvider({ children }: PluginProviderProps) {
       debug('Initializing plugin registry...', undefined, 'plugins');
 
       try {
-        await pluginRegistry.initialize();
+        if (!demoMode) {
+          await pluginRegistry.initialize();
+        } else {
+          await pluginRegistry.loadBuiltinPlugins();
+        }
         info('Plugin registry initialized', undefined, 'plugins');
       } catch (err) {
         logError('Failed to initialize plugin registry', { error: String(err) }, 'plugins');
@@ -109,7 +116,7 @@ export function PluginProvider({ children }: PluginProviderProps) {
         return config;
       });
 
-      const credentials = await discoverAllCredentials(providerConfigs);
+      const credentials = demoMode ? new Map<string, Credentials>() : await discoverAllCredentials(providerConfigs);
 
       const providerStates = new Map<string, ProviderState>();
       const configuredIds: string[] = [];
@@ -117,7 +124,7 @@ export function PluginProvider({ children }: PluginProviderProps) {
 
       for (const plugin of providerPlugins) {
         const creds = credentials.get(plugin.id);
-        const configured = creds ? plugin.isConfigured(creds) : false;
+        const configured = demoMode ? true : (creds ? plugin.isConfigured(creds) : false);
         providerStates.set(plugin.id, {
           plugin,
           configured,
@@ -138,6 +145,24 @@ export function PluginProvider({ children }: PluginProviderProps) {
         configured: configuredIds,
         unconfigured: unconfiguredIds,
       }, 'credentials');
+
+      if (demoMode && simulator) {
+        const snapshot = simulator.tick();
+        for (const [providerId, usage] of snapshot.providerUsage.entries()) {
+          const state = providerStates.get(providerId);
+          if (!state) continue;
+          providerStates.set(providerId, {
+            ...state,
+            usage,
+            lastFetchAt: Date.now(),
+            history: addToHistory(state.history, {
+              timestamp: Date.now(),
+              usedPercent: getMaxUsagePercent(usage),
+              limitReached: usage.limitReached,
+            }),
+          });
+        }
+      }
 
       setProviders(providerStates);
       setThemes(themePlugins);
@@ -169,6 +194,48 @@ export function PluginProvider({ children }: PluginProviderProps) {
     });
 
     try {
+      if (demoMode && simulator) {
+        const snapshot = simulator.tick();
+        const usage = snapshot.providerUsage.get(providerId) ?? {
+          fetchedAt: Date.now(),
+          error: 'Demo provider data missing',
+        };
+
+        if (storageReady) {
+          recordProviderSnapshots([
+            {
+              timestamp: Date.now(),
+              provider: providerId,
+              usedPercent: getMaxUsagePercent(usage),
+              limitReached: usage.limitReached ?? false,
+              resetsAt: usage.limits?.primary?.resetsAt ?? null,
+              rawJson: JSON.stringify(usage),
+            },
+          ]);
+        }
+
+        setProviders((prev) => {
+          const next = new Map(prev);
+          const current = next.get(providerId);
+          const currentHistory = current?.history ?? [];
+          const snapshotEntry: UsageSnapshot = {
+            timestamp: Date.now(),
+            usedPercent: getMaxUsagePercent(usage),
+            limitReached: usage.limitReached,
+          };
+          next.set(providerId, {
+            ...state,
+            usage,
+            loading: false,
+            lastFetchAt: Date.now(),
+            history: addToHistory(currentHistory, snapshotEntry),
+          });
+          return next;
+        });
+
+        return;
+      }
+
       const config: { id: string; envVars: string[]; externalPaths?: Array<{ path: string; type: string; key?: string }> } = {
         id: providerId,
         envVars: state.plugin.auth.envVars,
@@ -255,7 +322,7 @@ export function PluginProvider({ children }: PluginProviderProps) {
         return next;
       });
     }
-  }, [providers, debug, info, warn, logError, storageReady, recordProviderSnapshots]);
+  }, [providers, debug, info, warn, logError, storageReady, recordProviderSnapshots, demoMode, simulator]);
 
   const refreshAllProviders = useCallback(async () => {
     const configuredProviders = Array.from(providers.entries())

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { initDatabase, closeDatabase, isDatabaseInitialized, getAppRunId } from '@/storage/db.ts';
 import { insertProviderSnapshotBatch } from '@/storage/repos/providerSnapshots.ts';
 import { insertUsageEventBatch } from '@/storage/repos/usageEvents.ts';
@@ -12,6 +12,7 @@ import type {
   StreamTotals,
 } from '@/storage/types.ts';
 import { computeStreamDelta } from '@/storage/types.ts';
+import { useDemoMode } from './DemoModeContext.tsx';
 
 interface StorageContextValue {
   isReady: boolean;
@@ -39,8 +40,16 @@ export function StorageProvider({ children }: StorageProviderProps) {
   const lastProviderSnapshotRef = useRef<Map<string, number>>(new Map());
   const lastSessionSnapshotRef = useRef<Map<string, number>>(new Map());
   const previousTotalsRef = useRef<Map<string, StreamTotals>>(new Map());
+  const { demoMode, simulator } = useDemoMode();
 
   useEffect(() => {
+    // Skip real database in demo mode - all data stays in memory
+    if (demoMode) {
+      setIsReady(true);
+      setAppRunId(null);
+      return;
+    }
+
     let mounted = true;
 
     async function init() {
@@ -63,10 +72,10 @@ export function StorageProvider({ children }: StorageProviderProps) {
         closeDatabase();
       }
     };
-  }, []);
+  }, [demoMode]);
 
-  const recordProviderSnapshots = (snapshots: ProviderSnapshotInsert[]) => {
-    if (!isReady || snapshots.length === 0) return;
+  const recordProviderSnapshots = useCallback((snapshots: ProviderSnapshotInsert[]) => {
+    if (!isReady || demoMode || snapshots.length === 0) return;
 
     const now = Date.now();
     const filtered = snapshots.filter(s => {
@@ -84,24 +93,24 @@ export function StorageProvider({ children }: StorageProviderProps) {
     } catch (err) {
       console.error('Failed to record provider snapshots:', err);
     }
-  };
+  }, [isReady, demoMode]);
 
-  const recordUsageEvents = (events: UsageEventInsert[]) => {
-    if (!isReady || events.length === 0) return;
+  const recordUsageEvents = useCallback((events: UsageEventInsert[]) => {
+    if (!isReady || demoMode || events.length === 0) return;
 
     try {
       insertUsageEventBatch(events);
     } catch (err) {
       console.error('Failed to record usage events:', err);
     }
-  };
+  }, [isReady, demoMode]);
 
-  const recordAgentSession = (
+  const recordAgentSession = useCallback((
     session: AgentSessionUpsert,
     snapshot: Omit<AgentSessionSnapshotInsert, 'agentSessionId'>,
     streams: Omit<AgentSessionStreamSnapshotRow, 'agentSessionSnapshotId'>[]
   ): number | null => {
-    if (!isReady) return null;
+    if (!isReady || demoMode) return null;
 
     const sessionKey = `${session.agentId}:${session.sessionId}`;
     const now = Date.now();
@@ -167,15 +176,25 @@ export function StorageProvider({ children }: StorageProviderProps) {
       console.error('Failed to record agent session:', err);
       return null;
     }
-  };
+  }, [isReady, demoMode]);
 
-  const value: StorageContextValue = {
+  useEffect(() => {
+    if (!demoMode || !isReady || !simulator) return;
+
+    const interval = setInterval(() => {
+      simulator.tick();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [demoMode, isReady, simulator]);
+
+  const value: StorageContextValue = useMemo(() => ({
     isReady,
     appRunId,
     recordProviderSnapshots,
     recordUsageEvents,
     recordAgentSession,
-  };
+  }), [isReady, appRunId, recordProviderSnapshots, recordUsageEvents, recordAgentSession]);
 
   return (
     <StorageContext.Provider value={value}>

@@ -5,6 +5,7 @@ interface HeaderProps {
   title?: string;
   subtitle?: string;
   activeView?: 'dashboard' | 'providers' | 'trends' | 'projects' | 'settings';
+  demoMode?: boolean;
 }
 
 const ASCII_LOGO = [
@@ -18,7 +19,7 @@ const ASCII_LOGO = [
 
 const MIN_HEIGHT_FOR_LARGE_LOGO = 35;
 
-export function Header({ title = 'tokentop', subtitle, activeView }: HeaderProps) {
+export function Header({ title = 'tokentop', subtitle, activeView, demoMode = false }: HeaderProps) {
   const colors = useColors();
   const { height } = useTerminalDimensions();
 
@@ -56,6 +57,9 @@ export function Header({ title = 'tokentop', subtitle, activeView }: HeaderProps
                 <strong>{title}</strong>
               </span>
             </text>
+            {demoMode && (
+              <text height={1} fg={colors.warning}><strong>DEMO</strong></text>
+            )}
             {subtitle && (
               <text height={1} fg={colors.textMuted}>{subtitle}</text>
             )}

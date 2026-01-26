@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { loadConfig, saveConfig, DEFAULT_CONFIG, type AppConfig } from '@/config/schema.ts';
+import { useDemoMode } from './DemoModeContext.tsx';
 
 interface ConfigContextValue {
   config: AppConfig;
@@ -21,20 +22,49 @@ interface ConfigProviderProps {
 }
 
 export function ConfigProvider({ children, initialConfig }: ConfigProviderProps) {
-  const [config, setConfig] = useState<AppConfig>(initialConfig ?? DEFAULT_CONFIG);
+  const { demoMode } = useDemoMode();
+  const demoConfig: AppConfig = {
+    ...DEFAULT_CONFIG,
+    refresh: {
+      ...DEFAULT_CONFIG.refresh,
+      intervalMs: 5000,
+      pauseAutoRefresh: false,
+    },
+    display: {
+      ...DEFAULT_CONFIG.display,
+      defaultTimeWindow: '1h',
+      sidebarCollapsed: false,
+    },
+    budgets: {
+      daily: 50,
+      weekly: 200,
+      monthly: 800,
+      currency: 'USD',
+    },
+    alerts: {
+      ...DEFAULT_CONFIG.alerts,
+      budgetCriticalPercent: 90,
+    },
+  };
+  const [config, setConfig] = useState<AppConfig>(initialConfig ?? (demoMode ? demoConfig : DEFAULT_CONFIG));
   const [isLoading, setIsLoading] = useState(!initialConfig);
   const [pendingSave, setPendingSave] = useState(false);
 
   useEffect(() => {
     if (initialConfig) return; // Skip loading if initial config provided
+    if (demoMode) {
+      setConfig(demoConfig);
+      setIsLoading(false);
+      return;
+    }
     loadConfig().then((loaded) => {
       setConfig(loaded);
       setIsLoading(false);
     });
-  }, [initialConfig]);
+  }, [initialConfig, demoMode]);
 
   useEffect(() => {
-    if (isLoading || !pendingSave) return;
+    if (demoMode || isLoading || !pendingSave) return;
 
     const timeout = setTimeout(() => {
       saveConfig(config).catch(() => {});
@@ -79,9 +109,10 @@ export function ConfigProvider({ children, initialConfig }: ConfigProviderProps)
   }, []);
 
   const saveNow = useCallback(async () => {
+    if (demoMode) return;
     await saveConfig(config);
     setPendingSave(false);
-  }, [config]);
+  }, [config, demoMode]);
 
   return (
     <ConfigContext.Provider

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { useAgentSessions } from './AgentSessionContext.tsx';
 import { useTimeWindow } from './TimeWindowContext.tsx';
-import { useEmaActivity, type EmaActivityState, type EmaDebugData } from '../hooks/useEmaActivity.ts';
+import { useEmaActivity, type ActivityState, type ActivityDebugData } from '../hooks/useEmaActivity.ts';
 
 interface Deltas {
   cost: number;
@@ -10,14 +10,13 @@ interface Deltas {
 }
 
 interface DashboardRuntimeContextValue {
-  activity: EmaActivityState;
+  activity: ActivityState;
   sparkData: number[];
   
   deltas: Deltas;
   history: Array<{time: number, cost: number, tokens: number}>;
   
-  emaRef: React.MutableRefObject<{ lastTokens: number; lastTime: number; ema: number }>;
-  debugDataRef: React.MutableRefObject<EmaDebugData>;
+  debugDataRef: React.MutableRefObject<ActivityDebugData>;
 }
 
 const DashboardRuntimeContext = createContext<DashboardRuntimeContextValue | null>(null);
@@ -27,7 +26,7 @@ export function DashboardRuntimeProvider({ children }: { children: ReactNode }) 
   const { windowMs } = useTimeWindow();
   
   const totalTokens = agentSessions.reduce((sum, s) => sum + s.totals.input + s.totals.output, 0);
-  const { activity, sparkData, emaRef, debugDataRef } = useEmaActivity(totalTokens);
+  const { activity, sparkData, debugDataRef } = useEmaActivity(totalTokens);
 
   const historyRef = useRef<{time: number, cost: number, tokens: number}[]>([]);
   const [deltas, setDeltas] = useState<Deltas>({ cost: 0, tokens: 0, windowSec: 0 });
@@ -72,7 +71,6 @@ export function DashboardRuntimeProvider({ children }: { children: ReactNode }) 
     sparkData,
     deltas,
     history: historyRef.current,
-    emaRef,
     debugDataRef
   };
 

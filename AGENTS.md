@@ -399,7 +399,7 @@ echo '{"action":"launch","width":80,"height":24}
 
 | Action | Parameters | Description |
 |--------|------------|-------------|
-| `launch` | `width`, `height`, `debug` | Start the app |
+| `launch` | `width`, `height`, `debug`, `demo`, `demoSeed`, `demoPreset` | Start the app |
 | `close` | - | Stop the app |
 | `pressKey` | `key`, `modifiers` | Press a single key |
 | `pressTab` | - | Press Tab |
@@ -578,3 +578,105 @@ console.log(`Found ${opusSessions} opus sessions`);
 - Snapshots: `./snapshots/`
 - Golden files: `./golden/`
 - Recordings: `./recordings/`
+
+## Demo Mode (Deterministic Testing)
+
+Demo mode runs tokentop with synthetic data instead of real provider APIs. Use it for:
+- UI development without API credentials
+- Automated testing with the TUI driver
+- Reproducible screenshots and recordings
+- Regression testing after code changes
+
+### CLI Usage
+
+```bash
+ttop demo                      # Default demo (normal preset, random seed)
+ttop demo --seed 42            # Deterministic demo with seed 42
+ttop demo --preset heavy       # High activity preset
+ttop demo --seed 42 --preset light  # Combine seed and preset
+```
+
+### Presets
+
+| Preset | Sessions | Activity | Idle % | Burst % | Use Case |
+|--------|----------|----------|--------|---------|----------|
+| `light` | 2 | Low | 60% | 5% | Sparse activity, mostly idle |
+| `normal` | 4 | Medium | 35% | 10% | Balanced mix (default) |
+| `heavy` | 6 | High | 15% | 20% | Constant activity with spikes |
+
+Each preset includes a mix of active and inactive (historical) sessions.
+
+### Deterministic Behavior
+
+**With a seed, activity is 100% reproducible based on elapsed time from launch.**
+
+The simulator uses `seed + elapsed_seconds` to generate random values, so:
+- Same seed + same elapsed time = identical activity pattern
+- Different seeds = different but consistent patterns
+- No seed = random each run
+
+### Driver Integration
+
+Launch demo mode via the TUI driver:
+
+```bash
+echo '{"action":"launch","width":100,"height":30,"demo":true,"demoSeed":42}
+{"action":"waitForStable"}
+{"action":"snapshot","name":"demo-dashboard"}
+{"action":"close"}' | bun src/tui/driver/cli.ts 2>/dev/null
+```
+
+Driver launch options:
+- `demo: true` - Enable demo mode
+- `demoSeed: number` - Set deterministic seed
+- `demoPreset: "light" | "normal" | "heavy"` - Set activity preset
+
+### Regression Testing Workflow
+
+1. **Capture baseline** with a fixed seed:
+```bash
+echo '{"action":"launch","width":100,"height":30,"demo":true,"demoSeed":42}
+{"action":"waitForStable","maxIterations":15}
+{"action":"assert","name":"demo-baseline","update":true}
+{"action":"close"}' | bun src/tui/driver/cli.ts 2>/dev/null
+```
+
+2. **Make code changes**
+
+3. **Verify against baseline**:
+```bash
+echo '{"action":"launch","width":100,"height":30,"demo":true,"demoSeed":42}
+{"action":"waitForStable","maxIterations":15}
+{"action":"assert","name":"demo-baseline"}
+{"action":"close"}' | bun src/tui/driver/cli.ts 2>/dev/null
+```
+
+### Wall-Clock Timestamp Caveat
+
+**IMPORTANT**: The status bar shows real wall-clock time (`Last: HH:MM:SS`), which will always differ between runs. When comparing frames:
+
+```bash
+# This will show 1 line different (the timestamp line)
+{"action":"diff","file1":"run1.txt","file2":"run2.txt"}
+# Result: {"ok":true,"identical":false,"changedLines":1,...}
+```
+
+This is expected. All other data (costs, tokens, sessions, providers, sparklines) will be identical with the same seed.
+
+For assertions, consider using `ignoreWhitespace` or implement timestamp masking if exact matches are required.
+
+### Data Isolation
+
+Demo mode does NOT write to the real database. All demo data stays in memory:
+- No provider snapshots recorded
+- No usage events persisted
+- No session history saved
+- Database file is not created/modified
+
+This ensures demo runs don't pollute real usage data.
+
+### Source Files
+
+- Simulator: `src/demo/simulator.ts`
+- Context: `src/tui/contexts/DemoModeContext.tsx`
+- Storage guard: `src/tui/contexts/StorageContext.tsx` (skips DB in demo mode)

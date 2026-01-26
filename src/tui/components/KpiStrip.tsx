@@ -77,7 +77,7 @@ export interface KpiStripProps {
   deltaCost: number;
   deltaTokens: number;
   windowSec: number;
-  activity: { rate: number; ema: number; isSpike: boolean };
+  activity: { instantRate: number; avgRate: number; isSpike: boolean };
   sparkData: number[];
   budget?: BudgetInfo;
 }
@@ -125,11 +125,11 @@ export function KpiStrip({
   const windowLabel = formatWindowLabel(windowSec);
   
   const getActivityStatus = (): ActivityStatus => {
-    const { ema, isSpike } = activity;
-    if (isSpike || ema >= 2000) return { label: 'SPIKE', color: colors.error };
-    if (ema >= 800) return { label: 'HOT', color: colors.warning };
-    if (ema >= 200) return { label: 'BUSY', color: colors.success };
-    if (ema >= 50) return { label: 'LOW', color: colors.textMuted };
+    const { instantRate, avgRate, isSpike } = activity;
+    if (isSpike || instantRate >= 120) return { label: 'SPIKE', color: colors.error };
+    if (avgRate >= 40) return { label: 'HOT', color: colors.warning };
+    if (avgRate >= 10) return { label: 'BUSY', color: colors.success };
+    if (avgRate >= 2) return { label: 'LOW', color: colors.textMuted };
     return { label: 'IDLE', color: colors.textSubtle };
   };
 
@@ -139,6 +139,10 @@ export function KpiStrip({
   // Min width 20, max width 50
   // Target: 25% of terminal width
   const sparklineWidth = Math.min(50, Math.max(20, Math.floor(terminalWidth * 0.25)));
+
+  // Dynamic max for sparkline to ensure visibility of low rates
+  // Minimum 10 to avoid noise, but scale up to peak
+  const sparkMax = Math.max(10, ...sparkData.map(v => v * 1.2));
 
   return (
     <>
@@ -174,10 +178,16 @@ export function KpiStrip({
             <text fg={colors.textMuted}>ACTIVITY</text>
             <text>
               <span fg={activityStatus.color}>{activityStatus.label}</span>
-              <span fg={colors.textMuted}> {formatRate(activity.ema)}/s</span>
+              <span fg={colors.textMuted}> {formatRate(activity.instantRate)}/s</span>
             </text>
           </box>
-          <Sparkline data={sparkData} width={sparklineWidth} label="tok/s" fixedMax={2000} />
+          <Sparkline 
+            data={sparkData} 
+            width={sparklineWidth} 
+            label="tok/s" 
+            fixedMax={sparkMax}
+            thresholds={{ warning: 40, error: 120 }}
+          />
         </box>
       </box>
       

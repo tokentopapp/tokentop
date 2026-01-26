@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { AgentPlugin, SessionParseOptions } from '@/plugins/types/agent.ts';
 import type { AgentSessionAggregate, AgentInfo, AgentId, AgentName } from '@/agents/types.ts';
 import { AGENT_ID_TO_NAME } from '@/agents/types.ts';
@@ -10,6 +10,7 @@ import { useLogs } from './LogContext.tsx';
 import { usePlugins } from './PluginContext.tsx';
 import { useStorage } from './StorageContext.tsx';
 import type { PricingSource } from '@/storage/types.ts';
+import { useDemoMode } from './DemoModeContext.tsx';
 
 interface AgentSessionContextValue {
   sessions: AgentSessionAggregate[];
@@ -41,6 +42,7 @@ export function AgentSessionProvider({
   const { debug, info, warn, error: logError } = useLogs();
   const { isInitialized: pluginsInitialized } = usePlugins();
   const { isReady: storageReady, recordAgentSession } = useStorage();
+  const { demoMode, simulator } = useDemoMode();
 
   const discoverAgents = useCallback(async (): Promise<AgentInfo[]> => {
     const agentPlugins = pluginRegistry.getAll('agent');
@@ -108,6 +110,15 @@ export function AgentSessionProvider({
     setError(null);
 
     try {
+      if (demoMode && simulator) {
+        const snapshot = simulator.tick();
+        const demoSessions = snapshot.sessions;
+        setSessions(demoSessions);
+        setLastRefreshAt(Date.now());
+        info('Demo sessions refreshed', { count: demoSessions.length }, 'agent-sessions');
+        return;
+      }
+
       debug('Starting session refresh...', undefined, 'agent-sessions');
 
       const discoveredAgents = await discoverAgents();
@@ -193,23 +204,32 @@ export function AgentSessionProvider({
         setIsLoading(false);
       }
     }
-  }, [sessions.length, discoverAgents, fetchAgentSessions, debug, info, warn, logError, storageReady, recordAgentSession]);
+  }, [sessions.length, discoverAgents, fetchAgentSessions, debug, info, warn, logError, storageReady, recordAgentSession, demoMode]);
+
+  const refreshSessionsRef = useRef(refreshSessions);
+  refreshSessionsRef.current = refreshSessions;
 
   useEffect(() => {
-    if (pluginsInitialized) {
+    if (demoMode || pluginsInitialized) {
       refreshSessions();
     }
-  }, [pluginsInitialized]);
+  }, [pluginsInitialized, demoMode]);
 
   useEffect(() => {
     if (!autoRefresh) return;
 
+    debug(`Setting up session refresh interval: ${refreshInterval}ms`, undefined, 'agent-sessions');
+    
     const intervalId = setInterval(() => {
-      refreshSessions();
+      debug('Interval tick - refreshing sessions', undefined, 'agent-sessions');
+      refreshSessionsRef.current();
     }, refreshInterval);
 
-    return () => clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, refreshSessions]);
+    return () => {
+      debug('Clearing session refresh interval', undefined, 'agent-sessions');
+      clearInterval(intervalId);
+    };
+  }, [autoRefresh, refreshInterval, debug]);
 
   const value: AgentSessionContextValue = {
     sessions,
