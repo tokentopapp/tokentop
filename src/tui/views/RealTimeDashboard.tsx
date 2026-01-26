@@ -43,13 +43,14 @@ export function RealTimeDashboard() {
   
   const [showHelp, setShowHelp] = useState(false);
   const [selectedRow, setSelectedRow] = useState(0);
-  const [focusedPanel, setFocusedPanel] = useState<'sessions' | 'sidebar'>('sessions');
+  const [focusedPanel, setFocusedPanel] = useState<'sessions' | 'sidebar' | 'limits'>('sessions');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(config.display.sidebarCollapsed);
   const [filterQuery, setFilterQuery] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [sortField, setSortField] = useState<'cost' | 'tokens' | 'time'>('cost');
   const [pendingG, setPendingG] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [limitSelectedIndex, setLimitSelectedIndex] = useState(0);
 
   // Collapse sidebar if terminal is too narrow, overriding user preference if needed
   const effectiveSidebarCollapsed = sidebarCollapsed || terminalWidth < 100;
@@ -150,6 +151,8 @@ export function RealTimeDashboard() {
 
   const { hideDrawer } = useDrawer();
 
+  const visibleProviderCount = Math.min(configuredProviders.length, terminalWidth >= 140 ? 6 : 4);
+
   useDashboardKeyboard({
     state: {
       showHelp,
@@ -162,6 +165,8 @@ export function RealTimeDashboard() {
       sortField,
       pendingG,
       scrollOffset,
+      limitSelectedIndex,
+      providerCount: visibleProviderCount,
     },
     actions: {
       setShowHelp,
@@ -175,6 +180,7 @@ export function RealTimeDashboard() {
       setSortField,
       setPendingG,
       setScrollOffset,
+      setLimitSelectedIndex,
     },
     processedSessions,
   });
@@ -219,6 +225,8 @@ export function RealTimeDashboard() {
           color: getProviderColor(p.plugin.id),
           ...(p.usage?.error ? { error: p.usage.error } : {}),
         }))}
+        focused={focusedPanel === 'limits'}
+        selectedIndex={limitSelectedIndex}
       />
 
       <box flexDirection="row" gap={1} flexGrow={1} minHeight={1}>
@@ -247,7 +255,8 @@ export function RealTimeDashboard() {
         <text fg={colors.textSubtle} height={1} flexGrow={1}>
           {isFiltering ? 'Type to filter  Esc cancel  Enter apply' : 
            filterQuery ? `Esc clear  / edit filter  ↑↓ navigate  s sort` :
-           focusedPanel === 'sessions' ? '/ filter  ↑↓ navigate  Enter details  s sort' :
+           focusedPanel === 'sessions' ? '/ filter  ↑↓ navigate  Enter details  s sort  l limits' :
+           focusedPanel === 'limits' ? '←→ select provider  Tab next  Esc back' :
            focusedPanel === 'sidebar' ? 'Tab back to sessions' :
            '/ filter  i sidebar  Tab switch  ? help'}
         </text>

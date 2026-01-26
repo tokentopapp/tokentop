@@ -12,6 +12,7 @@ interface LimitGaugeProps {
   compact?: boolean;
   labelWidth?: number;
   barWidth?: number;
+  selected?: boolean;
 }
 
 const FRACTIONAL_BLOCKS = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
@@ -73,6 +74,7 @@ export function LimitGauge({
   compact = false,
   labelWidth = 12,
   barWidth = 10,
+  selected = false,
 }: LimitGaugeProps) {
   const colors = useColors();
   
@@ -94,10 +96,12 @@ export function LimitGauge({
     const statusIcon = isCritical ? '▲' : isWarning ? '▲' : '';
     const statusColor = isCritical ? colors.error : isWarning ? colors.warning : colors.textMuted;
     const textColor = isCritical ? colors.error : isWarning ? colors.warning : colors.text;
+    const selPrefix = selected ? '▸' : '';
     
     return (
       <text height={1}>
-        <span fg={textColor}>{shortLabel}</span>
+        {selected && <span fg={colors.primary}>{selPrefix}</span>}
+        <span fg={selected ? colors.text : textColor}>{shortLabel}</span>
         <span fg={statusColor}> {percentStr}</span>
         {statusIcon && <span fg={statusColor}> {statusIcon}</span>}
       </text>
@@ -154,11 +158,13 @@ export function LimitGauge({
     <span fg={colors.textSubtle}> {resetTime}</span>
   ) : null;
   
+  const selectionIndicator = selected ? '▸' : statusIcon;
+  
   return (
-    <box height={1} overflow="hidden">
+    <box height={1} overflow="hidden" {...(selected ? { backgroundColor: colors.borderMuted } : {})}>
       <text height={1}>
-        <span fg={statusColor}>{statusIcon} </span>
-        <span fg={isCritical ? colors.error : isWarning ? colors.warning : colors.textMuted}>{displayLabel} </span>
+        <span fg={selected ? colors.primary : statusColor}>{selectionIndicator} </span>
+        <span fg={selected ? colors.text : (isCritical ? colors.error : isWarning ? colors.warning : colors.textMuted)}>{displayLabel} </span>
         {renderFractionalBar(percent, barWidth, barColor, colors.border)}
         {percentDisplay}
         {resetDisplay}

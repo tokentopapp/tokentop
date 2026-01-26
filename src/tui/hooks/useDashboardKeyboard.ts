@@ -35,13 +35,15 @@ interface DashboardKeyboardState {
   showHelp: boolean;
   showSessionDrawer: boolean;
   selectedRow: number;
-  focusedPanel: 'sessions' | 'sidebar';
+  focusedPanel: 'sessions' | 'sidebar' | 'limits';
   sidebarCollapsed: boolean;
   filterQuery: string;
   isFiltering: boolean;
   sortField: 'cost' | 'tokens' | 'time';
   pendingG: boolean;
   scrollOffset: number;
+  limitSelectedIndex: number;
+  providerCount: number;
 }
 
 interface DashboardKeyboardActions {
@@ -49,13 +51,14 @@ interface DashboardKeyboardActions {
   openSessionDrawer: () => void;
   closeSessionDrawer: () => void;
   setSelectedRow: (fn: (prev: number) => number) => void;
-  setFocusedPanel: (fn: (prev: 'sessions' | 'sidebar') => 'sessions' | 'sidebar') => void;
+  setFocusedPanel: (fn: (prev: 'sessions' | 'sidebar' | 'limits') => 'sessions' | 'sidebar' | 'limits') => void;
   setSidebarCollapsed: (fn: (prev: boolean) => boolean) => void;
   setFilterQuery: (fn: (prev: string) => string) => void;
   setIsFiltering: (val: boolean) => void;
   setSortField: (fn: (prev: 'cost' | 'tokens' | 'time') => 'cost' | 'tokens' | 'time') => void;
   setPendingG: (val: boolean) => void;
   setScrollOffset: (val: number) => void;
+  setLimitSelectedIndex: (fn: (prev: number) => number) => void;
 }
 
 interface UseDashboardKeyboardProps {
@@ -149,7 +152,16 @@ export function useDashboardKeyboard({
     }
 
     if (key.name === 'tab') {
-      actions.setFocusedPanel(curr => curr === 'sessions' ? 'sidebar' : 'sessions');
+      actions.setFocusedPanel(curr => {
+        if (curr === 'sessions') return 'limits';
+        if (curr === 'limits') return 'sidebar';
+        return 'sessions';
+      });
+      return;
+    }
+
+    if (key.name === 'l') {
+      actions.setFocusedPanel(() => 'limits');
       return;
     }
 
@@ -210,6 +222,17 @@ export function useDashboardKeyboard({
         actions.openSessionDrawer();
       } else {
         actions.setPendingG(false);
+      }
+    }
+
+    if (state.focusedPanel === 'limits') {
+      const maxIndex = Math.max(0, state.providerCount - 1);
+      if (key.name === 'left' || key.name === 'h') {
+        actions.setLimitSelectedIndex(curr => Math.max(curr - 1, 0));
+      } else if (key.name === 'right' || key.name === 'l') {
+        actions.setLimitSelectedIndex(curr => Math.min(curr + 1, maxIndex));
+      } else if (key.name === 'escape') {
+        actions.setFocusedPanel(() => 'sessions');
       }
     }
   });

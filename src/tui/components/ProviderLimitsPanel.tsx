@@ -10,10 +10,16 @@ interface ProviderData {
   color: string;
   error?: string;
   resetTime?: string;
+  used?: number;
+  limit?: number;
+  limitType?: string;
 }
 
 interface ProviderLimitsPanelProps {
   providers: ProviderData[];
+  focused?: boolean;
+  selectedIndex?: number;
+  onSelectedChange?: (index: number) => void;
 }
 
 type LayoutMode = 'hidden' | 'compact' | 'normal' | 'wide';
@@ -41,7 +47,39 @@ function sortByUrgency(providers: ProviderData[]): ProviderData[] {
   });
 }
 
-export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
+function formatDetailLine(provider: ProviderData): string {
+  const parts: string[] = [provider.name];
+  
+  if (provider.used !== undefined && provider.limit !== undefined) {
+    const formatNum = (n: number) => {
+      if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+      if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+      return n.toString();
+    };
+    parts.push(`${formatNum(provider.used)}/${formatNum(provider.limit)}`);
+    if (provider.limitType) {
+      parts.push(provider.limitType);
+    }
+  }
+  
+  parts.push(`${Math.round(provider.usedPercent)}%`);
+  
+  if (provider.resetTime) {
+    parts.push(`resets ${provider.resetTime}`);
+  }
+  
+  if (provider.error) {
+    parts.push(`error: ${provider.error}`);
+  }
+  
+  return parts.join(' • ');
+}
+
+export function ProviderLimitsPanel({ 
+  providers, 
+  focused = false, 
+  selectedIndex = 0,
+}: ProviderLimitsPanelProps) {
   const colors = useColors();
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
   
@@ -52,6 +90,9 @@ export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
     return null;
   }
   
+  const safeSelectedIndex = Math.min(selectedIndex, sortedProviders.length - 1);
+  const selectedProvider = sortedProviders[safeSelectedIndex];
+  
   if (layoutMode === 'compact') {
     const maxShow = 4;
     const shown = sortedProviders.slice(0, maxShow);
@@ -60,7 +101,7 @@ export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
     return (
       <box flexDirection="row" height={1} paddingLeft={1} paddingRight={1} gap={1} overflow="hidden">
         <text fg={colors.textMuted} height={1}>LIMITS:</text>
-        {shown.map(p => (
+        {shown.map((p, idx) => (
           <LimitGauge
             key={p.id}
             label={p.name}
@@ -68,6 +109,7 @@ export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
             color={p.color}
             {...(p.error ? { error: p.error } : {})}
             compact={true}
+            selected={focused && idx === safeSelectedIndex}
           />
         ))}
         {remaining > 0 && (
@@ -85,28 +127,32 @@ export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
       <box 
         flexDirection="column" 
         border 
-        borderStyle="single" 
+        borderStyle={focused ? 'double' : 'single'}
         padding={1} 
-        borderColor={colors.border} 
+        borderColor={focused ? colors.primary : colors.border} 
         overflow="hidden" 
-        height={5} 
+        height={focused ? 6 : 5} 
         flexShrink={0}
       >
-        <text fg={colors.textMuted} height={1}>PROVIDER LIMITS</text>
+        <text fg={colors.textMuted} height={1}>PROVIDER LIMITS {focused ? '(←→ navigate, Tab exit)' : ''}</text>
         <box flexDirection="row" gap={3} overflow="hidden" height={1}>
-          {shown.map(p => (
+          {shown.map((p, idx) => (
             <LimitGauge
               key={p.id}
               label={p.name}
               usedPercent={p.usedPercent}
               color={p.color}
-            {...(p.error ? { error: p.error } : {})}
-            {...(p.resetTime ? { resetTime: p.resetTime } : {})}
-            labelWidth={14}
-            barWidth={12}
+              {...(p.error ? { error: p.error } : {})}
+              {...(p.resetTime ? { resetTime: p.resetTime } : {})}
+              labelWidth={14}
+              barWidth={12}
+              selected={focused && idx === safeSelectedIndex}
             />
           ))}
         </box>
+        {focused && selectedProvider && (
+          <text fg={colors.textSubtle} height={1}>{formatDetailLine(selectedProvider)}</text>
+        )}
       </box>
     );
   }
@@ -118,16 +164,16 @@ export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
     <box 
       flexDirection="column" 
       border 
-      borderStyle="single" 
+      borderStyle={focused ? 'double' : 'single'}
       padding={1} 
-      borderColor={colors.border} 
+      borderColor={focused ? colors.primary : colors.border} 
       overflow="hidden" 
-      height={5} 
+      height={focused ? 6 : 5} 
       flexShrink={0}
     >
-      <text fg={colors.textMuted} height={1}>PROVIDER LIMITS</text>
+      <text fg={colors.textMuted} height={1}>PROVIDER LIMITS {focused ? '(←→ navigate, Tab exit)' : ''}</text>
       <box flexDirection="row" gap={2} overflow="hidden" height={1}>
-        {shown.map(p => (
+        {shown.map((p, idx) => (
           <LimitGauge
             key={p.id}
             label={p.name}
@@ -137,9 +183,13 @@ export function ProviderLimitsPanel({ providers }: ProviderLimitsPanelProps) {
             {...(p.resetTime ? { resetTime: p.resetTime } : {})}
             labelWidth={12}
             barWidth={10}
+            selected={focused && idx === safeSelectedIndex}
           />
         ))}
       </box>
+      {focused && selectedProvider && (
+        <text fg={colors.textSubtle} height={1}>{formatDetailLine(selectedProvider)}</text>
+      )}
     </box>
   );
 }

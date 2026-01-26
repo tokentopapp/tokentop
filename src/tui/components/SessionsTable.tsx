@@ -13,7 +13,7 @@ interface SessionsTableProps {
   isLoading: boolean;
   isFiltering: boolean;
   filterQuery: string;
-  focusedPanel: 'sessions' | 'sidebar';
+  focusedPanel: 'sessions' | 'sidebar' | 'limits';
   windowLabel: string;
   getProviderColor: (id: string) => string;
 }

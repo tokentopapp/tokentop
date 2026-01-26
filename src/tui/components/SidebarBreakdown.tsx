@@ -4,7 +4,7 @@ import type { AgentSessionAggregate, AgentSessionStream } from '../../agents/typ
 
 interface SidebarBreakdownProps {
   sessions: AgentSessionAggregate[];
-  focusedPanel: 'sessions' | 'sidebar';
+  focusedPanel: 'sessions' | 'sidebar' | 'limits';
   getProviderColor: (id: string) => string;
 }
 
