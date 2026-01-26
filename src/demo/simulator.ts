@@ -42,7 +42,7 @@ export const DEMO_PRESETS: Record<DemoPreset, DemoPresetConfig> = {
   heavy: {
     sessionCount: 6,
     activityMultiplier: 2.0,
-    extraProviderCount: 5,
+    extraProviderCount: 10,
     usageRange: [25, 95],
     idleProbability: 0.15,
     burstProbability: 0.2,
@@ -145,6 +145,11 @@ const EXTRA_PROVIDERS: Array<{ id: string; label: string; balance?: string }> = 
   { id: 'perplexity', label: 'Perplexity Pro', balance: '$12.50' },
   { id: 'antigravity', label: 'Antigravity AI', balance: '$31.00' },
   { id: 'minimax', label: 'MiniMax', balance: '$22.00' },
+  { id: 'cohere', label: 'Cohere Enterprise', balance: '$45.00' },
+  { id: 'mistral', label: 'Mistral API', balance: '$15.00' },
+  { id: 'groq', label: 'Groq Cloud', balance: '$8.50' },
+  { id: 'together', label: 'Together AI', balance: '$20.00' },
+  { id: 'fireworks', label: 'Fireworks AI', balance: '$12.00' },
 ];
 
 function clamp(value: number, min: number, max: number): number {
