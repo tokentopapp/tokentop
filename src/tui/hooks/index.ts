@@ -6,3 +6,9 @@ export type { DashboardDeltas, UseDashboardStateResult } from './useDashboardSta
 
 export { usePulse, getPulseColor } from './usePulse.ts';
 export type { UsePulseOptions } from './usePulse.ts';
+
+export { useValueFlash, interpolateColor } from './useValueFlash.ts';
+export type { UseValueFlashOptions, UseValueFlashResult } from './useValueFlash.ts';
+
+export { useAnimatedValue, useAnimatedCurrency, useAnimatedTokens, useAnimatedCount, easings } from './useAnimatedValue.ts';
+export type { UseAnimatedValueOptions, EasingFunction } from './useAnimatedValue.ts';
