@@ -64,13 +64,21 @@ export function ProviderLimitsPanel({
   const safeSelectedIndex = Math.min(selectedIndex, sortedProviders.length - 1);
   
   if (layoutMode === 'compact') {
-    const maxShow = 4;
-    const shown = sortedProviders.slice(0, maxShow);
-    const remaining = sortedProviders.length - maxShow;
+    const baseMaxShow = 4;
+    const hasMore = sortedProviders.length > baseMaxShow;
+    const needsScrolling = safeSelectedIndex >= baseMaxShow;
+    const maxShow = needsScrolling ? baseMaxShow - 1 : baseMaxShow;
+    const startIndex = Math.max(0, Math.min(safeSelectedIndex - maxShow + 1, sortedProviders.length - maxShow));
+    const showLeftArrow = hasMore && startIndex > 0;
+    const shown = sortedProviders.slice(startIndex, startIndex + maxShow);
+    const remaining = sortedProviders.length - startIndex - maxShow;
     
     return (
       <box flexDirection="row" height={1} paddingLeft={1} paddingRight={1} gap={1} overflow="hidden">
         <text fg={colors.textMuted} height={1}>LIMITS:</text>
+        {showLeftArrow && (
+          <text fg={colors.textSubtle} height={1}>◀</text>
+        )}
         {shown.map((p, idx) => (
           <LimitGauge
             key={p.id}
@@ -79,19 +87,24 @@ export function ProviderLimitsPanel({
             color={p.color}
             {...(p.error ? { error: p.error } : {})}
             compact={true}
-            selected={focused && idx === safeSelectedIndex}
+            selected={focused && (startIndex + idx) === safeSelectedIndex}
           />
         ))}
         {remaining > 0 && (
-          <text fg={colors.textSubtle} height={1}>+{remaining} more</text>
+          <text fg={colors.textSubtle} height={1}>▶ +{remaining}</text>
         )}
       </box>
     );
   }
   
   if (layoutMode === 'wide') {
-    const maxShow = 6;
-    const shown = sortedProviders.slice(0, maxShow);
+    const baseMaxShow = 6;
+    const hasMore = sortedProviders.length > baseMaxShow;
+    const needsScrolling = safeSelectedIndex >= baseMaxShow;
+    const maxShow = needsScrolling ? baseMaxShow - 1 : baseMaxShow;
+    const startIndex = Math.max(0, Math.min(safeSelectedIndex - maxShow + 1, sortedProviders.length - maxShow));
+    const showLeftArrow = hasMore && startIndex > 0;
+    const shown = sortedProviders.slice(startIndex, startIndex + maxShow);
     
     return (
       <box 
@@ -109,6 +122,9 @@ export function ProviderLimitsPanel({
           </text>
         </box>
         <box flexDirection="row" gap={3} overflow="hidden" height={1} paddingLeft={2}>
+          {showLeftArrow && (
+            <text fg={colors.textSubtle} height={1}>◀</text>
+          )}
           {shown.map((p, idx) => (
             <LimitGauge
               key={p.id}
@@ -119,16 +135,24 @@ export function ProviderLimitsPanel({
               {...(p.resetTime ? { resetTime: p.resetTime } : {})}
               labelWidth={14}
               barWidth={12}
-              selected={focused && idx === safeSelectedIndex}
+              selected={focused && (startIndex + idx) === safeSelectedIndex}
             />
           ))}
+          {hasMore && startIndex + maxShow < sortedProviders.length && (
+            <text fg={colors.textSubtle} height={1}>▶</text>
+          )}
         </box>
       </box>
     );
   }
   
-  const maxShow = 4;
-  const shown = sortedProviders.slice(0, maxShow);
+  const baseMaxShow = 4;
+  const hasMore = sortedProviders.length > baseMaxShow;
+  const needsScrolling = safeSelectedIndex >= baseMaxShow;
+  const maxShow = needsScrolling ? baseMaxShow - 1 : baseMaxShow;
+  const startIndex = Math.max(0, Math.min(safeSelectedIndex - maxShow + 1, sortedProviders.length - maxShow));
+  const showLeftArrow = hasMore && startIndex > 0;
+  const shown = sortedProviders.slice(startIndex, startIndex + maxShow);
   
   return (
     <box 
@@ -146,6 +170,9 @@ export function ProviderLimitsPanel({
         </text>
       </box>
       <box flexDirection="row" gap={2} overflow="hidden" height={1} paddingLeft={2}>
+        {showLeftArrow && (
+          <text fg={colors.textSubtle} height={1}>◀</text>
+        )}
         {shown.map((p, idx) => (
           <LimitGauge
             key={p.id}
@@ -156,9 +183,12 @@ export function ProviderLimitsPanel({
             {...(p.resetTime ? { resetTime: p.resetTime } : {})}
             labelWidth={12}
             barWidth={10}
-            selected={focused && idx === safeSelectedIndex}
+            selected={focused && (startIndex + idx) === safeSelectedIndex}
           />
         ))}
+        {hasMore && startIndex + maxShow < sortedProviders.length && (
+          <text fg={colors.textSubtle} height={1}>▶</text>
+        )}
       </box>
     </box>
   );

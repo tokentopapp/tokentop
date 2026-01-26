@@ -151,8 +151,6 @@ export function RealTimeDashboard() {
 
   const { hideDrawer } = useDrawer();
 
-  const visibleProviderCount = Math.min(configuredProviders.length, terminalWidth >= 140 ? 6 : 4);
-
   useDashboardKeyboard({
     state: {
       showHelp,
@@ -166,7 +164,7 @@ export function RealTimeDashboard() {
       pendingG,
       scrollOffset,
       limitSelectedIndex,
-      providerCount: visibleProviderCount,
+      providerCount: configuredProviders.length,
     },
     actions: {
       setShowHelp,
