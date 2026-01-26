@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import type {
@@ -8,6 +9,8 @@ import type {
   AgentProviderConfig,
   SessionParseOptions,
   SessionUsageData,
+  ActivityUpdate,
+  ActivityCallback,
 } from '../types/agent.ts';
 import type { Credentials, OAuthCredentials } from '../types/provider.ts';
 
@@ -16,6 +19,7 @@ const OPENCODE_CONFIG_PATH = path.join(os.homedir(), '.config/opencode/opencode.
 const OPENCODE_STORAGE_PATH = path.join(os.homedir(), '.local/share/opencode/storage');
 const OPENCODE_SESSIONS_PATH = path.join(OPENCODE_STORAGE_PATH, 'session');
 const OPENCODE_MESSAGES_PATH = path.join(OPENCODE_STORAGE_PATH, 'message');
+const OPENCODE_PARTS_PATH = path.join(OPENCODE_STORAGE_PATH, 'part');
 
 const sessionCache: {
   lastCheck: number;
@@ -94,6 +98,139 @@ interface OpenCodeSession {
   };
 }
 
+interface OpenCodePart {
+  id: string;
+  sessionID: string;
+  messageID: string;
+  type: 'step-start' | 'step-finish' | 'reasoning' | 'tool' | 'text';
+  tokens?: OpenCodeMessageTokens;
+  cost?: number;
+  time?: {
+    start?: number;
+    end?: number;
+  };
+}
+
+interface ActivityWatcherState {
+  watcher: fsSync.FSWatcher | null;
+  callback: ActivityCallback | null;
+  seenParts: Set<string>;
+  debounceTimer: ReturnType<typeof setTimeout> | null;
+  pendingDirs: Set<string>;
+  messageWatchers: Map<string, fsSync.FSWatcher>;
+}
+
+const activityWatcher: ActivityWatcherState = {
+  watcher: null,
+  callback: null,
+  seenParts: new Set(),
+  debounceTimer: null,
+  pendingDirs: new Set(),
+  messageWatchers: new Map(),
+};
+
+async function processPartFile(partPath: string): Promise<void> {
+  if (activityWatcher.seenParts.has(partPath)) return;
+  activityWatcher.seenParts.add(partPath);
+
+  const part = await readJsonFile<OpenCodePart>(partPath);
+  if (!part || part.type !== 'step-finish' || !part.tokens) return;
+
+  const callback = activityWatcher.callback;
+  if (!callback) return;
+
+  const tokens: ActivityUpdate['tokens'] = {
+    input: part.tokens.input ?? 0,
+    output: part.tokens.output ?? 0,
+  };
+  if (part.tokens.reasoning !== undefined) tokens.reasoning = part.tokens.reasoning;
+  if (part.tokens.cache?.read !== undefined) tokens.cacheRead = part.tokens.cache.read;
+  if (part.tokens.cache?.write !== undefined) tokens.cacheWrite = part.tokens.cache.write;
+
+  const update: ActivityUpdate = {
+    sessionId: part.sessionID,
+    messageId: part.messageID,
+    tokens,
+    timestamp: Date.now(),
+  };
+
+  callback(update);
+}
+
+async function scanMessageDir(msgDirPath: string): Promise<void> {
+  try {
+    const files = await fs.readdir(msgDirPath);
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const partPath = path.join(msgDirPath, file);
+        await processPartFile(partPath);
+      }
+    }
+  } catch {
+    // Ignore - directory may not exist
+  }
+}
+
+function watchMessageDir(msgDirPath: string): void {
+  if (activityWatcher.messageWatchers.has(msgDirPath)) return;
+
+  try {
+    const watcher = fsSync.watch(msgDirPath, async (eventType, filename) => {
+      if (eventType === 'rename' && filename?.endsWith('.json')) {
+        const partPath = path.join(msgDirPath, filename);
+        setTimeout(() => processPartFile(partPath), 50);
+      }
+    });
+
+    activityWatcher.messageWatchers.set(msgDirPath, watcher);
+    scanMessageDir(msgDirPath);
+  } catch {
+    // Ignore - directory may not exist
+  }
+}
+
+function startActivityWatch(callback: ActivityCallback): void {
+  if (activityWatcher.watcher) {
+    activityWatcher.callback = callback;
+    return;
+  }
+
+  activityWatcher.callback = callback;
+  activityWatcher.seenParts.clear();
+
+  try {
+    activityWatcher.watcher = fsSync.watch(OPENCODE_PARTS_PATH, (eventType, filename) => {
+      if (eventType === 'rename' && filename?.startsWith('msg_')) {
+        const msgDirPath = path.join(OPENCODE_PARTS_PATH, filename);
+        watchMessageDir(msgDirPath);
+      }
+    });
+  } catch {
+    // Ignore - directory may not exist yet
+  }
+}
+
+function stopActivityWatch(): void {
+  if (activityWatcher.debounceTimer) {
+    clearTimeout(activityWatcher.debounceTimer);
+    activityWatcher.debounceTimer = null;
+  }
+
+  for (const watcher of activityWatcher.messageWatchers.values()) {
+    watcher.close();
+  }
+  activityWatcher.messageWatchers.clear();
+
+  if (activityWatcher.watcher) {
+    activityWatcher.watcher.close();
+    activityWatcher.watcher = null;
+  }
+
+  activityWatcher.callback = null;
+  activityWatcher.seenParts.clear();
+  activityWatcher.pendingDirs.clear();
+}
+
 function buildOAuthCredentials(
   accessToken: string,
   refreshToken?: string,
@@ -147,9 +284,12 @@ export const opencodeAgentPlugin: AgentPlugin = {
   capabilities: {
     sessionParsing: true,
     authReading: true,
-    realTimeTracking: false,
+    realTimeTracking: true,
     multiProvider: true,
   },
+
+  startActivityWatch,
+  stopActivityWatch,
 
   async isInstalled(): Promise<boolean> {
     try {
