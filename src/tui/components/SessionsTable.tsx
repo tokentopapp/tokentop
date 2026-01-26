@@ -5,6 +5,7 @@ import { useColors } from '../contexts/ThemeContext.tsx';
 import type { AgentSessionAggregate } from '../../agents/types.ts';
 import { useValueFlash, interpolateColor } from '../hooks/useValueFlash.ts';
 import { useAnimatedValue } from '../hooks/useAnimatedValue.ts';
+import { useEntranceAnimation, applyEntranceFade } from '../hooks/useEntranceAnimation.ts';
 
 interface SessionsTableProps {
   sessions: AgentSessionAggregate[];
@@ -78,6 +79,7 @@ function getActivityFadeColor(lastActivityAt: number, baseColor: string, dimColo
 const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getProviderColor }: SessionRowProps) {
   const colors = useColors();
   const isActive = session.status === 'active';
+  const entranceIntensity = useEntranceAnimation({ durationMs: 500 });
   
   const totalTokens = session.totals.input + session.totals.output;
   const costUsd = session.totalCostUsd ?? 0;
@@ -91,24 +93,36 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
   const primaryStream = session.streams[0];
   const providerId = primaryStream?.providerId ?? 'unknown';
   const modelId = primaryStream?.modelId ?? 'unknown';
-  const providerColor = getProviderColor(providerId);
+  const baseProviderColor = getProviderColor(providerId);
   const repoName = extractRepoName(session.projectPath ?? '—');
   const projectMaxLen = isWide ? 28 : 18;
   const projectDisplay = repoName.length > projectMaxLen ? repoName.slice(0, projectMaxLen - 1) + '…' : repoName;
   
-  const statusColor = isActive 
+  const dimColor = colors.background;
+  const fade = (color: string) => applyEntranceFade(entranceIntensity, color, dimColor);
+  
+  const baseStatusColor = isActive 
     ? getActivityFadeColor(session.lastActivityAt, colors.success, colors.textMuted)
     : colors.textMuted;
+  const statusColor = fade(baseStatusColor);
   
   const baseCostColor = colors.success;
-  const costColor = costFlash > 0
+  const costColorBeforeFade = costFlash > 0
     ? interpolateColor(costFlash, baseCostColor, '#ffffff')
     : baseCostColor;
+  const costColor = fade(costColorBeforeFade);
     
   const baseTokenColor = colors.text;
-  const tokenColor = tokenFlash > 0
+  const tokenColorBeforeFade = tokenFlash > 0
     ? interpolateColor(tokenFlash, baseTokenColor, '#ffffff')
     : baseTokenColor;
+  const tokenColor = fade(tokenColorBeforeFade);
+  
+  const providerColor = fade(baseProviderColor);
+  const textColor = fade(colors.text);
+  const textSubtleColor = fade(colors.textSubtle);
+  const textMutedColor = fade(colors.textMuted);
+  const warningColor = fade(colors.warning);
   
   const formatTokensVal = (val: number): string => {
     if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
@@ -117,7 +131,7 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
   };
   
   const railChar = isSelected ? '▌' : ' ';
-  const railColor = colors.primary;
+  const railColor = fade(colors.primary);
   const rowBg = isSelected ? colors.borderMuted : undefined;
   
   const lastActivity = formatRelativeTime(session.lastActivityAt);
@@ -128,25 +142,29 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
   const streamCount = session.streams.length;
   const modelWithCount = streamCount > 1 ? `${modelDisplay.slice(0, 12)}+${streamCount - 1}` : modelDisplay;
   
-  const lastColor = isActive 
+  const baseLastColor = isActive 
     ? getActivityFadeColor(session.lastActivityAt, colors.text, colors.textMuted)
     : colors.textMuted;
+  const lastColor = fade(baseLastColor);
   
   const bgProp = rowBg ? { bg: rowBg } : {};
+  
+  const sessionIdShort = session.sessionId.slice(-7);
   
   if (isWide) {
     return (
       <box flexDirection="row" paddingRight={1} height={1} gap={1} {...(rowBg ? { backgroundColor: rowBg } : {})}>
         <text width={2} height={1} fg={railColor} {...bgProp}>{railChar}</text>
-        <text width={5} height={1} fg={lastColor} {...bgProp}>{lastActivity.padStart(4)}</text>
-        <text width={6} height={1} fg={colors.textMuted} {...bgProp}>{duration.padStart(5)}</text>
-        <text width={14} height={1} fg={isSelected ? colors.text : colors.textSubtle} {...bgProp}>{session.agentName.padEnd(13)}</text>
-        <text width={20} height={1} fg={providerColor} {...bgProp}>{modelWithCount.padEnd(19)}</text>
-        <text width={6} height={1} fg={colors.textMuted} {...bgProp}>{String(session.requestCount).padStart(5)}</text>
-        <text width={9} height={1} fg={tokenColor} {...bgProp}>{formatTokensVal(animatedTokens).padStart(8)}</text>
-        <text width={8} height={1} fg={colors.warning} {...bgProp}>{costPerHour.padStart(7)}</text>
+        <text width={8} height={1} fg={textMutedColor} {...bgProp}>{sessionIdShort}</text>
+        <text width={12} height={1} fg={isSelected ? textColor : textSubtleColor} {...bgProp}>{session.agentName.padEnd(11)}</text>
+        <text width={18} height={1} fg={providerColor} {...bgProp}>{modelWithCount.padEnd(17)}</text>
+        <text width={5} height={1} fg={textMutedColor} {...bgProp}>{String(session.requestCount).padStart(4)}</text>
+        <text width={8} height={1} fg={tokenColor} {...bgProp}>{formatTokensVal(animatedTokens).padStart(7)}</text>
+        <text width={8} height={1} fg={warningColor} {...bgProp}>{costPerHour.padStart(7)}</text>
         <text width={9} height={1} fg={costColor} {...bgProp}>{`$${animatedCost.toFixed(2)}`.padStart(8)}</text>
-        <text flexGrow={1} height={1} fg={colors.textSubtle} {...bgProp}>{projectDisplay}</text>
+        <text flexGrow={1} height={1} fg={textSubtleColor} {...bgProp}>{projectDisplay}</text>
+        <text width={6} height={1} fg={textMutedColor} {...bgProp}>{duration.padStart(5)}</text>
+        <text width={5} height={1} fg={lastColor} {...bgProp}>{lastActivity.padStart(4)}</text>
         <text width={2} height={1} fg={statusColor} {...bgProp}>{isActive ? '●' : '○'}</text>
       </box>
     );
@@ -155,12 +173,12 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
   return (
     <box flexDirection="row" paddingRight={1} height={1} {...(rowBg ? { backgroundColor: rowBg } : {})}>
       <text width={2} height={1} fg={railColor} {...bgProp}>{railChar}</text>
-      <text width={5} height={1} fg={lastColor} {...bgProp}>{lastActivity.padStart(4)}</text>
-      <text width={12} height={1} fg={isSelected ? colors.text : colors.textSubtle} {...bgProp}>{session.agentName}</text>
+      <text width={8} height={1} fg={textMutedColor} {...bgProp}>{sessionIdShort}</text>
+      <text width={12} height={1} fg={isSelected ? textColor : textSubtleColor} {...bgProp}>{session.agentName}</text>
       <text width={16} height={1} fg={providerColor} {...bgProp}>{modelWithCount.padEnd(15)}</text>
-      <text width={8} height={1} fg={tokenColor} {...bgProp}>{formatTokensVal(animatedTokens).padStart(7)}</text>
       <text width={8} height={1} fg={costColor} {...bgProp}>{`$${animatedCost.toFixed(2)}`.padStart(7)}</text>
-      <text flexGrow={1} height={1} fg={colors.textSubtle} paddingLeft={1} {...bgProp}>{projectDisplay}</text>
+      <text flexGrow={1} height={1} fg={textSubtleColor} paddingLeft={1} {...bgProp}>{projectDisplay}</text>
+      <text width={5} height={1} fg={lastColor} {...bgProp}>{lastActivity.padStart(4)}</text>
       <text width={2} height={1} fg={statusColor} {...bgProp}>{isActive ? '●' : '○'}</text>
     </box>
   );
@@ -204,26 +222,27 @@ export const SessionsTable = forwardRef(function SessionsTable(
       {isWide ? (
         <box flexDirection="row" paddingRight={1} height={1} gap={1}>
           <text width={2} height={1} fg={colors.textMuted}> </text>
-          <text width={5} height={1} fg={colors.textMuted}>LAST </text>
-          <text width={6} height={1} fg={colors.textMuted}>DUR   </text>
-          <text width={14} height={1} fg={colors.textMuted}>AGENT         </text>
-          <text width={20} height={1} fg={colors.textMuted}>MODEL               </text>
-          <text width={6} height={1} fg={colors.textMuted}>  REQ </text>
-          <text width={9} height={1} fg={colors.textMuted}>  TOKENS </text>
+          <text width={8} height={1} fg={colors.textMuted}>ID      </text>
+          <text width={12} height={1} fg={colors.textMuted}>AGENT       </text>
+          <text width={18} height={1} fg={colors.textMuted}>MODEL             </text>
+          <text width={5} height={1} fg={colors.textMuted}> REQ </text>
+          <text width={8} height={1} fg={colors.textMuted}> TOKENS </text>
           <text width={8} height={1} fg={colors.textMuted}>   $/HR </text>
           <text width={9} height={1} fg={colors.textMuted}>    COST </text>
           <text flexGrow={1} height={1} fg={colors.textMuted}>PROJECT</text>
+          <text width={6} height={1} fg={colors.textMuted}>  DUR </text>
+          <text width={5} height={1} fg={colors.textMuted}>LAST </text>
           <text width={2} height={1} fg={colors.textMuted}> </text>
         </box>
       ) : (
         <box flexDirection="row" paddingRight={1} height={1}>
           <text width={2} height={1} fg={colors.textMuted}> </text>
-          <text width={5} height={1} fg={colors.textMuted}>LAST </text>
+          <text width={8} height={1} fg={colors.textMuted}>ID      </text>
           <text width={12} height={1} fg={colors.textMuted}>AGENT       </text>
           <text width={16} height={1} fg={colors.textMuted}>MODEL           </text>
-          <text width={8} height={1} fg={colors.textMuted}>TOKENS  </text>
           <text width={8} height={1} fg={colors.textMuted}>COST    </text>
           <text flexGrow={1} height={1} fg={colors.textMuted} paddingLeft={1}>PROJECT</text>
+          <text width={5} height={1} fg={colors.textMuted}>LAST </text>
           <text width={2} height={1} fg={colors.textMuted}> </text>
         </box>
       )}

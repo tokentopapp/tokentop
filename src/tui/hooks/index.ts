@@ -12,3 +12,6 @@ export type { UseValueFlashOptions, UseValueFlashResult } from './useValueFlash.
 
 export { useAnimatedValue, useAnimatedCurrency, useAnimatedTokens, useAnimatedCount, easings } from './useAnimatedValue.ts';
 export type { UseAnimatedValueOptions, EasingFunction } from './useAnimatedValue.ts';
+
+export { useEntranceAnimation, applyEntranceFade } from './useEntranceAnimation.ts';
+export type { UseEntranceAnimationOptions } from './useEntranceAnimation.ts';
