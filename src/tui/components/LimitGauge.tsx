@@ -96,11 +96,9 @@ export function LimitGauge({
     const statusIcon = isCritical ? '▲' : isWarning ? '▲' : '';
     const statusColor = isCritical ? colors.error : isWarning ? colors.warning : colors.textMuted;
     const textColor = isCritical ? colors.error : isWarning ? colors.warning : colors.text;
-    const selPrefix = selected ? '▸' : '';
-    
     return (
       <text height={1}>
-        {selected && <span fg={colors.primary}>{selPrefix}</span>}
+        {selected && <span fg={colors.primary}>▌</span>}
         <span fg={selected ? colors.text : textColor}>{shortLabel}</span>
         <span fg={statusColor}> {percentStr}</span>
         {statusIcon && <span fg={statusColor}> {statusIcon}</span>}
@@ -158,7 +156,7 @@ export function LimitGauge({
     <span fg={colors.textSubtle}> {resetTime}</span>
   ) : null;
   
-  const selectionIndicator = selected ? '▸' : statusIcon;
+  const selectionIndicator = selected ? '▌' : statusIcon;
   
   return (
     <box height={1} overflow="hidden" {...(selected ? { backgroundColor: colors.borderMuted } : {})}>
