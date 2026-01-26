@@ -19,7 +19,6 @@ interface ProviderLimitsPanelProps {
   providers: ProviderData[];
   focused?: boolean;
   selectedIndex?: number;
-  onSelectedChange?: (index: number) => void;
 }
 
 type LayoutMode = 'hidden' | 'compact' | 'normal' | 'wide';
@@ -47,34 +46,6 @@ function sortByUrgency(providers: ProviderData[]): ProviderData[] {
   });
 }
 
-function formatDetailLine(provider: ProviderData): string {
-  const parts: string[] = [provider.name];
-  
-  if (provider.used !== undefined && provider.limit !== undefined) {
-    const formatNum = (n: number) => {
-      if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-      if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-      return n.toString();
-    };
-    parts.push(`${formatNum(provider.used)}/${formatNum(provider.limit)}`);
-    if (provider.limitType) {
-      parts.push(provider.limitType);
-    }
-  }
-  
-  parts.push(`${Math.round(provider.usedPercent)}%`);
-  
-  if (provider.resetTime) {
-    parts.push(`resets ${provider.resetTime}`);
-  }
-  
-  if (provider.error) {
-    parts.push(`error: ${provider.error}`);
-  }
-  
-  return parts.join(' • ');
-}
-
 export function ProviderLimitsPanel({ 
   providers, 
   focused = false, 
@@ -91,7 +62,6 @@ export function ProviderLimitsPanel({
   }
   
   const safeSelectedIndex = Math.min(selectedIndex, sortedProviders.length - 1);
-  const selectedProvider = sortedProviders[safeSelectedIndex];
   
   if (layoutMode === 'compact') {
     const maxShow = 4;
@@ -131,7 +101,7 @@ export function ProviderLimitsPanel({
         padding={1} 
         borderColor={focused ? colors.primary : colors.border} 
         overflow="hidden" 
-        height={focused ? 6 : 5} 
+        height={5} 
         flexShrink={0}
       >
         <text fg={colors.textMuted} height={1}>PROVIDER LIMITS {focused ? '(←→ navigate, Tab exit)' : ''}</text>
@@ -150,9 +120,6 @@ export function ProviderLimitsPanel({
             />
           ))}
         </box>
-        {focused && selectedProvider && (
-          <text fg={colors.textSubtle} height={1}>{formatDetailLine(selectedProvider)}</text>
-        )}
       </box>
     );
   }
@@ -168,7 +135,7 @@ export function ProviderLimitsPanel({
       padding={1} 
       borderColor={focused ? colors.primary : colors.border} 
       overflow="hidden" 
-      height={focused ? 6 : 5} 
+      height={5} 
       flexShrink={0}
     >
       <text fg={colors.textMuted} height={1}>PROVIDER LIMITS {focused ? '(←→ navigate, Tab exit)' : ''}</text>
@@ -187,9 +154,6 @@ export function ProviderLimitsPanel({
           />
         ))}
       </box>
-      {focused && selectedProvider && (
-        <text fg={colors.textSubtle} height={1}>{formatDetailLine(selectedProvider)}</text>
-      )}
     </box>
   );
 }
