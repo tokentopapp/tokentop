@@ -1,8 +1,11 @@
 import { useTerminalDimensions } from '@opentui/react';
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { useTimeWindow, type TimeWindow } from '../contexts/TimeWindowContext.tsx';
+import { useConfig } from '../contexts/ConfigContext.tsx';
 import { Sparkline } from './Sparkline.tsx';
 import { usePulse } from '../hooks/usePulse.ts';
+import { useValueFlash, interpolateColor } from '../hooks/useValueFlash.ts';
+import { useAnimatedValue } from '../hooks/useAnimatedValue.ts';
 
 type MetricType = 'cost' | 'tokens' | 'requests' | 'rate' | 'default';
 type BudgetStatus = 'ok' | 'warning' | 'critical';
@@ -14,6 +17,7 @@ interface KPICardProps {
   subValue?: string;
   metric?: MetricType;
   budgetStatus?: BudgetStatus;
+  flashIntensity?: number;
 }
 
 const TIME_WINDOW_EXPANDED: Record<TimeWindow, string> = {
@@ -53,11 +57,11 @@ function TimeWindowCard({ isCompact }: TimeWindowCardProps) {
   );
 }
 
-function KPICard({ title, value, delta, subValue, metric = 'default', budgetStatus }: KPICardProps) {
+function KPICard({ title, value, delta, subValue, metric = 'default', budgetStatus, flashIntensity = 0 }: KPICardProps) {
   const colors = useColors();
   const pulseStep = usePulse({ enabled: budgetStatus === 'critical', intervalMs: 200 });
   
-  const getMetricColor = (m: MetricType, status?: BudgetStatus): string => {
+  const getBaseMetricColor = (m: MetricType, status?: BudgetStatus): string => {
     if (m === 'cost' && status) {
       if (status === 'critical') {
         const intensity = Math.sin((pulseStep / 12) * Math.PI * 2) * 0.5 + 0.5;
@@ -75,7 +79,12 @@ function KPICard({ title, value, delta, subValue, metric = 'default', budgetStat
     }
   };
   
-  const valueColor = getMetricColor(metric, budgetStatus);
+  const baseColor = getBaseMetricColor(metric, budgetStatus);
+  const flashHighlight = '#ffffff';
+  const valueColor = flashIntensity > 0 
+    ? interpolateColor(flashIntensity, baseColor, flashHighlight)
+    : baseColor;
+  
   const deltaColor = budgetStatus === 'critical' ? colors.error : 
                      budgetStatus === 'warning' ? colors.warning : colors.success;
   
@@ -134,6 +143,23 @@ export function KpiStrip({
 }: KpiStripProps) {
   const colors = useColors();
   const { width: terminalWidth } = useTerminalDimensions();
+  const { config } = useConfig();
+  const { sparkline: sparklineConfig } = config.display;
+  
+  const animatedCost = useAnimatedValue(totalCost, { durationMs: 400, precision: 2 });
+  const animatedTokens = useAnimatedValue(totalTokens, { durationMs: 400, precision: 0 });
+  const animatedRequests = useAnimatedValue(totalRequests, { durationMs: 300, precision: 0 });
+  
+  const { intensity: costFlashIntensity } = useValueFlash(totalCost, { 
+    durationMs: 500, 
+    increaseOnly: true,
+    threshold: 0.001 
+  });
+  const { intensity: tokenFlashIntensity } = useValueFlash(totalTokens, { 
+    durationMs: 400, 
+    increaseOnly: true,
+    threshold: 10 
+  });
   
   const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
   const formatTokens = (val: number) => val > 1000000 ? `${(val/1000000).toFixed(1)}M` : `${(val/1000).toFixed(1)}K`;
@@ -189,20 +215,22 @@ export function KpiStrip({
         <TimeWindowCard isCompact={isCompact} />
         <KPICard 
           title="COST" 
-          value={formatCurrency(totalCost)} 
+          value={formatCurrency(animatedCost)} 
           delta={hasEnoughHistory ? `+${formatCurrency(deltaCost)} (${windowLabel})` : 'gathering...'} 
           metric="cost"
           budgetStatus={budgetStatus}
+          flashIntensity={costFlashIntensity}
         />
         <KPICard 
           title="TOKENS" 
-          value={formatTokens(totalTokens)} 
+          value={formatTokens(animatedTokens)} 
           delta={hasEnoughHistory ? `+${formatTokens(deltaTokens)} (${windowLabel})` : 'gathering...'}
           metric="tokens"
+          flashIntensity={tokenFlashIntensity}
         />
         <KPICard 
           title="REQUESTS" 
-          value={totalRequests.toLocaleString()} 
+          value={Math.round(animatedRequests).toLocaleString()} 
           subValue={`${activeCount} active`}
           metric="requests"
         />
@@ -229,6 +257,9 @@ export function KpiStrip({
             label="tok/s" 
             fixedMax={sparkMax}
             thresholds={{ warning: 150, error: 500 }}
+            style={sparklineConfig.style}
+            orientation={sparklineConfig.orientation}
+            showBaseline={sparklineConfig.showBaseline}
           />
         </box>
       </box>
