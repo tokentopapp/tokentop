@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
 import { useColors } from '../contexts/ThemeContext.tsx';
+import { useTimeWindow } from '../contexts/TimeWindowContext.tsx';
 
 interface StatusBarProps {
   lastRefresh?: number;
   nextRefresh?: number;
-  message?: string;
   demoMode?: boolean;
 }
 
-export function StatusBar({ lastRefresh, nextRefresh, message, demoMode = false }: StatusBarProps) {
+export function StatusBar({ lastRefresh, nextRefresh, demoMode = false }: StatusBarProps) {
   const colors = useColors();
   const { width: termWidth } = useTerminalDimensions();
+  const { window: timeWindow } = useTimeWindow();
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -25,14 +26,14 @@ export function StatusBar({ lastRefresh, nextRefresh, message, demoMode = false 
   const isNarrow = termWidth < 100;
 
   const lastRefreshText = lastRefresh
-    ? (isNarrow ? formatTimeShort(lastRefresh) : `Last: ${formatTime(lastRefresh)}`)
+    ? (isNarrow ? formatTimeShort(lastRefresh) : formatTime(lastRefresh))
     : '';
 
   const nextRefreshText = nextRefresh
     ? `${formatCountdown(nextRefresh)}`
     : '';
 
-  const hints = isNarrow ? '? help' : '1-4 views  , settings  : cmd  ? help';
+  const timeLabel = timeWindow.toUpperCase();
 
   return (
     <box
@@ -45,11 +46,17 @@ export function StatusBar({ lastRefresh, nextRefresh, message, demoMode = false 
       height={1}
       overflow="hidden"
     >
-      <text fg={colors.textMuted}>
-        {demoMode ? 'tokentop DEMO' : (message ?? 'tokentop')}
-      </text>
-      <box flexDirection="row" gap={1} overflow="hidden">
-        <text fg={colors.textSubtle}>{hints}</text>
+      <box flexDirection="row" gap={2} overflow="hidden">
+        <text fg={colors.textSubtle}>1-4 views</text>
+        <text fg={colors.text}>
+          <span fg={colors.textSubtle}>t</span> <span fg={colors.info}>{timeLabel}</span>
+        </text>
+        <text fg={colors.textSubtle}>, settings</text>
+        <text fg={colors.textSubtle}>: cmd</text>
+        <text fg={colors.textSubtle}>? help</text>
+      </box>
+      <box flexDirection="row" gap={2} overflow="hidden">
+        {demoMode && <text fg={colors.warning}>{isNarrow ? 'DEMO' : 'DEMO MODE'}</text>}
         {lastRefreshText && <text fg={colors.textSubtle}>{lastRefreshText}</text>}
         {nextRefreshText && <text fg={colors.textSubtle}>{nextRefreshText}</text>}
       </box>
