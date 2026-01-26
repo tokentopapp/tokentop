@@ -351,7 +351,7 @@ function ConfiguredApp() {
     <TimeWindowProvider defaultWindow={config.display.defaultTimeWindow}>
       <ToastProvider>
         <PluginProvider>
-          <AgentSessionProvider autoRefresh={true} refreshInterval={3000}>
+          <AgentSessionProvider autoRefresh={true} refreshInterval={1000}>
             <DashboardRuntimeProvider>
               <DrawerProvider>
                 <AppContent />
