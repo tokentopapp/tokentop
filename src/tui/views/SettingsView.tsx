@@ -128,39 +128,27 @@ const SETTINGS: SettingItem[] = [
     },
   },
   {
-    key: 'budgetWarningPercent',
+    key: 'warningPercent',
     label: 'Warning Threshold (%)',
     category: 'alerts',
     type: 'select',
-    options: ['70%', '75%', '80%', '85%', '90%'],
-    getValue: (c) => `${c.alerts.budgetWarningPercent}%`,
+    options: ['55%', '60%', '65%', '70%', '75%', '80%', '85%', '90%', '95%'],
+    getValue: (c) => `${c.alerts.warningPercent}%`,
     setValue: (c, v) => {
       const percent = parseInt((v as string).replace('%', ''), 10);
-      return { ...c, alerts: { ...c.alerts, budgetWarningPercent: percent } };
+      return { ...c, alerts: { ...c.alerts, warningPercent: percent } };
     },
   },
   {
-    key: 'budgetCriticalPercent',
+    key: 'criticalPercent',
     label: 'Critical Threshold (%)',
     category: 'alerts',
     type: 'select',
-    options: ['90%', '95%', '98%', '100%'],
-    getValue: (c) => `${c.alerts.budgetCriticalPercent}%`,
+    options: ['75%', '80%', '85%', '90%', '95%', '98%', '100%'],
+    getValue: (c) => `${c.alerts.criticalPercent}%`,
     setValue: (c, v) => {
       const percent = parseInt((v as string).replace('%', ''), 10);
-      return { ...c, alerts: { ...c.alerts, budgetCriticalPercent: percent } };
-    },
-  },
-  {
-    key: 'providerLimitWarning',
-    label: 'Provider Limit Warning (%)',
-    category: 'alerts',
-    type: 'select',
-    options: ['80%', '85%', '90%', '95%'],
-    getValue: (c) => `${c.alerts.providerLimitWarningPercent}%`,
-    setValue: (c, v) => {
-      const percent = parseInt((v as string).replace('%', ''), 10);
-      return { ...c, alerts: { ...c.alerts, providerLimitWarningPercent: percent } };
+      return { ...c, alerts: { ...c.alerts, criticalPercent: percent } };
     },
   },
   {

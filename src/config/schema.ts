@@ -12,9 +12,8 @@ export interface BudgetConfig {
 }
 
 export interface AlertThresholds {
-  budgetWarningPercent: number;
-  budgetCriticalPercent: number;
-  providerLimitWarningPercent: number;
+  warningPercent: number;
+  criticalPercent: number;
 }
 
 export type SparklineStyle = 'braille' | 'block';
@@ -82,9 +81,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     currency: 'USD',
   },
   alerts: {
-    budgetWarningPercent: 80,
-    budgetCriticalPercent: 95,
-    providerLimitWarningPercent: 90,
+    warningPercent: 80,
+    criticalPercent: 95,
   },
   providers: {
     hideUnconfigured: false,

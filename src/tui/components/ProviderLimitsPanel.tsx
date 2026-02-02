@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTerminalDimensions } from '@opentui/react';
 import { useColors } from '../contexts/ThemeContext.tsx';
+import { useConfig } from '../contexts/ConfigContext.tsx';
 import { LimitGauge } from './LimitGauge.tsx';
 
 interface ProviderData {
@@ -30,12 +31,16 @@ function getLayoutMode(width: number, height: number): LayoutMode {
   return 'normal';
 }
 
-function sortByUrgency(providers: ProviderData[]): ProviderData[] {
+function sortByUrgency(
+  providers: ProviderData[], 
+  warningThreshold: number, 
+  criticalThreshold: number
+): ProviderData[] {
   return [...providers].sort((a, b) => {
-    const aIsCritical = a.usedPercent >= 95;
-    const bIsCritical = b.usedPercent >= 95;
-    const aIsWarning = a.usedPercent >= 80;
-    const bIsWarning = b.usedPercent >= 80;
+    const aIsCritical = a.usedPercent >= criticalThreshold;
+    const bIsCritical = b.usedPercent >= criticalThreshold;
+    const aIsWarning = a.usedPercent >= warningThreshold;
+    const bIsWarning = b.usedPercent >= warningThreshold;
     
     if (aIsCritical && !bIsCritical) return -1;
     if (!aIsCritical && bIsCritical) return 1;
@@ -52,10 +57,17 @@ export function ProviderLimitsPanel({
   selectedIndex = 0,
 }: ProviderLimitsPanelProps) {
   const colors = useColors();
+  const { config } = useConfig();
   const { width: termWidth, height: termHeight } = useTerminalDimensions();
   
+  const warningThreshold = config.alerts.warningPercent;
+  const criticalThreshold = config.alerts.criticalPercent;
+  
   const layoutMode = getLayoutMode(termWidth, termHeight);
-  const sortedProviders = useMemo(() => sortByUrgency(providers), [providers]);
+  const sortedProviders = useMemo(
+    () => sortByUrgency(providers, warningThreshold, criticalThreshold), 
+    [providers, warningThreshold, criticalThreshold]
+  );
   
   if (layoutMode === 'hidden' || sortedProviders.length === 0) {
     return null;
@@ -88,6 +100,8 @@ export function ProviderLimitsPanel({
             {...(p.error ? { error: p.error } : {})}
             compact={true}
             selected={focused && (startIndex + idx) === safeSelectedIndex}
+            warningThreshold={warningThreshold}
+            criticalThreshold={criticalThreshold}
           />
         ))}
         {showRightArrow && (
@@ -136,6 +150,8 @@ export function ProviderLimitsPanel({
               labelWidth={14}
               barWidth={12}
               selected={focused && (startIndex + idx) === safeSelectedIndex}
+              warningThreshold={warningThreshold}
+              criticalThreshold={criticalThreshold}
             />
           ))}
           {showRightArrow && (
@@ -184,6 +200,8 @@ export function ProviderLimitsPanel({
             labelWidth={12}
             barWidth={10}
             selected={focused && (startIndex + idx) === safeSelectedIndex}
+            warningThreshold={warningThreshold}
+            criticalThreshold={criticalThreshold}
           />
         ))}
         {showRightArrow && (

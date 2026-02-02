@@ -43,7 +43,7 @@ export function ConfigProvider({ children, initialConfig }: ConfigProviderProps)
     },
     alerts: {
       ...DEFAULT_CONFIG.alerts,
-      budgetCriticalPercent: 90,
+      criticalPercent: 90,
     },
   };
   const [config, setConfig] = useState<AppConfig>(initialConfig ?? (demoMode ? demoConfig : DEFAULT_CONFIG));

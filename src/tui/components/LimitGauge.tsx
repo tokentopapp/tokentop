@@ -13,6 +13,8 @@ interface LimitGaugeProps {
   labelWidth?: number;
   barWidth?: number;
   selected?: boolean;
+  warningThreshold?: number;
+  criticalThreshold?: number;
 }
 
 const FRACTIONAL_BLOCKS = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
@@ -75,15 +77,25 @@ export function LimitGauge({
   labelWidth = 12,
   barWidth = 10,
   selected = false,
+  warningThreshold = 90,
+  criticalThreshold = 95,
 }: LimitGaugeProps) {
   const colors = useColors();
   
   const percent = usedPercent ?? 0;
-  const isCritical = percent >= 95;
-  const isWarning = percent >= 80;
+  const isCritical = percent >= criticalThreshold;
+  const isWarning = percent >= warningThreshold && percent < criticalThreshold;
   
-  const pulseStep = usePulse({ enabled: isCritical, intervalMs: 150 });
-  const pulseIntensity = isCritical ? Math.abs(Math.sin(pulseStep * 0.15)) : 0;
+  // Critical: fast, intense pulse (80ms interval)
+  // Warning: moderate pulse (200ms interval) to draw attention
+  const criticalPulseStep = usePulse({ enabled: isCritical, intervalMs: 80 });
+  const warningPulseStep = usePulse({ enabled: isWarning, intervalMs: 200 });
+  
+  const pulseIntensity = isCritical 
+    ? Math.abs(Math.sin(criticalPulseStep * 0.3)) 
+    : isWarning 
+      ? Math.abs(Math.sin(warningPulseStep * 0.25))
+      : 0;
   
   const truncateLabel = (lbl: string, maxLen: number): string => {
     if (lbl.length <= maxLen) return lbl.padEnd(maxLen);
@@ -93,9 +105,10 @@ export function LimitGauge({
   if (compact) {
     const shortLabel = truncateLabel(label, 10);
     const percentStr = usedPercent !== null ? `${Math.round(percent)}%` : '--';
-    const statusIcon = isCritical ? '▲' : isWarning ? '▲' : '';
-    const statusColor = isCritical ? colors.error : isWarning ? colors.warning : colors.textMuted;
-    const textColor = isCritical ? colors.error : isWarning ? colors.warning : colors.text;
+    const statusIcon = isCritical ? '!!' : isWarning ? '!' : '';
+    const statusColor = isCritical ? colors.error : isWarning ? color : colors.textMuted;
+    const textColor = isCritical ? colors.error : isWarning ? color : colors.text;
+    
     return (
       <text height={1}>
         {selected && <span fg={colors.primary}>▌</span>}
@@ -138,11 +151,11 @@ export function LimitGauge({
   const barColor = isCritical 
     ? interpolatePulseColor(pulseIntensity, colors.error, colors.background)
     : isWarning 
-      ? colors.warning 
+      ? interpolatePulseColor(pulseIntensity, color, colors.background)
       : color;
   
-  const statusIcon = isCritical ? '■' : isWarning ? '▲' : '●';
-  const statusColor = isCritical ? colors.error : isWarning ? colors.warning : colors.success;
+  const statusIcon = isCritical ? '!!' : isWarning ? '!' : '●';
+  const statusColor = isCritical ? colors.error : isWarning ? color : colors.success;
   
   const displayLabel = truncateLabel(label, labelWidth);
   const percentStr = usedPercent !== null ? `${Math.round(percent)}%`.padStart(4) : '  --';
@@ -150,7 +163,7 @@ export function LimitGauge({
   const percentDisplay = isCritical ? (
     <span fg={colors.background} bg={colors.error}>{percentStr}</span>
   ) : (
-    <span fg={isWarning ? colors.warning : colors.textMuted}>{percentStr}</span>
+    <span fg={isWarning ? color : colors.textMuted}>{percentStr}</span>
   );
   
   const resetDisplay = resetTime ? (
@@ -163,7 +176,7 @@ export function LimitGauge({
     <box height={1} overflow="hidden" {...(selected ? { backgroundColor: colors.borderMuted } : {})}>
       <text height={1}>
         <span fg={selected ? colors.primary : statusColor}>{selectionIndicator} </span>
-        <span fg={selected ? colors.text : (isCritical ? colors.error : isWarning ? colors.warning : colors.textMuted)}>{displayLabel} </span>
+        <span fg={selected ? colors.text : (isCritical ? colors.error : isWarning ? color : colors.textMuted)}>{displayLabel} </span>
         {renderFractionalBar(percent, barWidth, barColor, colors.border)}
         {percentDisplay}
         {resetDisplay}

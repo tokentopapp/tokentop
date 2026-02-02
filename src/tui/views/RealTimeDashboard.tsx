@@ -210,8 +210,8 @@ export function RealTimeDashboard() {
           daily: config.budgets.daily,
           weekly: config.budgets.weekly,
           monthly: config.budgets.monthly,
-          warningPercent: config.alerts.budgetWarningPercent,
-          criticalPercent: config.alerts.budgetCriticalPercent,
+          warningPercent: config.alerts.warningPercent,
+          criticalPercent: config.alerts.criticalPercent,
         }}
       />
 
