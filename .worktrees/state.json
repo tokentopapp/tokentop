@@ -1,6 +1,47 @@
 {
   "version": 1,
-  "mainWorktree": "/test",
-  "worktrees": [],
-  "updatedAt": "2026-02-06T06:00:41.014Z"
+  "mainWorktree": "/Users/nigel/development/experiments/model-usage-app/tokentop",
+  "worktrees": [
+    {
+      "name": "test-feature",
+      "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/test-feature",
+      "branch": "feature/test-feature",
+      "createdAt": "2026-02-06T06:03:42.874Z",
+      "lastActivity": "2026-02-06T06:03:42.874Z",
+      "gitStatus": "clean"
+    },
+    {
+      "name": "fix-bug-123",
+      "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/fix-bug-123",
+      "branch": "fix/fix-bug-123",
+      "createdAt": "2026-02-06T06:03:55.167Z",
+      "lastActivity": "2026-02-06T06:03:55.167Z",
+      "gitStatus": "clean"
+    },
+    {
+      "name": "refactor-api",
+      "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/refactor-api",
+      "branch": "refactor/refactor-api",
+      "createdAt": "2026-02-06T06:03:59.452Z",
+      "lastActivity": "2026-02-06T06:03:59.452Z",
+      "gitStatus": "clean"
+    },
+    {
+      "name": "theme-settings",
+      "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/theme-settings",
+      "branch": "feature/theme-settings",
+      "createdAt": "2026-02-06T06:04:03.926Z",
+      "lastActivity": "2026-02-06T06:04:03.926Z",
+      "gitStatus": "clean"
+    },
+    {
+      "name": "docs-readme",
+      "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/docs-readme",
+      "branch": "docs/docs-readme",
+      "createdAt": "2026-02-06T06:04:34.460Z",
+      "lastActivity": "2026-02-06T06:04:34.460Z",
+      "gitStatus": "clean"
+    }
+  ],
+  "updatedAt": "2026-02-06T06:05:48.033Z"
 }
