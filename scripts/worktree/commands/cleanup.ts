@@ -146,16 +146,12 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
     const state = await readState();
     const candidates: CleanupCandidate[] = [];
 
-    // Find cleanup candidates
     for (const worktree of state.worktrees) {
-      // Skip main worktree
       if (worktree.path === state.mainWorktree) {
         continue;
       }
 
-      // Check if worktree path exists
       if (!existsSync(worktree.path)) {
-        // Worktree doesn't exist, add as candidate for state cleanup
         candidates.push({
           name: worktree.name,
           path: worktree.path,
@@ -167,10 +163,8 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
         continue;
       }
 
-      // Check for uncommitted changes
       const hasChanges = hasUncommittedChanges(worktree.path);
 
-      // Check if branch is merged
       if (isBranchMerged(worktree.branch)) {
         candidates.push({
           name: worktree.name,
@@ -183,7 +177,6 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
         continue;
       }
 
-      // Check if worktree is stale
       if (isWorktreeStale(worktree.lastActivity, options.staleDays)) {
         candidates.push({
           name: worktree.name,
@@ -196,7 +189,6 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
       }
     }
 
-    // Filter out worktrees with uncommitted changes (unless force)
     const safeToRemove = candidates.filter(c => !c.hasUncommittedChanges);
     const unsafeToRemove = candidates.filter(c => c.hasUncommittedChanges);
 
@@ -205,7 +197,6 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
       return;
     }
 
-    // Display what would be removed
     console.log(`Found ${candidates.length} worktree(s) to clean up:\n`);
 
     if (safeToRemove.length > 0) {
@@ -240,14 +231,12 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
       return;
     }
 
-    // Dry run mode - stop here
     if (options.dryRun) {
       console.log('🔍 Dry run mode - no changes made.');
       console.log(`\nTo actually remove these worktrees, run without --dry-run`);
       return;
     }
 
-    // Require confirmation unless --force
     if (!options.force) {
       const confirmed = await promptConfirmation(
         `\nRemove ${safeToRemove.length} worktree(s)?`
@@ -259,7 +248,6 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
       }
     }
 
-    // Perform cleanup
     console.log('\n🗑️  Removing worktrees...\n');
 
     let successCount = 0;
@@ -269,7 +257,6 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
       try {
         console.log(`Removing: ${candidate.name}`);
 
-        // Remove worktree physically if it exists
         if (existsSync(candidate.path)) {
           await removeWorktreePhysically(candidate.path, true);
           console.log(`  ✓ Removed worktree: ${candidate.path}`);
@@ -277,11 +264,9 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
           console.log(`  ℹ Worktree path doesn't exist, cleaning state only`);
         }
 
-        // Remove from state
         await removeWorktreeFromState(candidate.name);
         console.log(`  ✓ Updated state file`);
 
-        // Delete branch if requested
         if (options.deleteBranches && candidate.reason === 'merged') {
           deleteBranch(candidate.branch);
         }
@@ -295,7 +280,6 @@ export async function cleanupWorktrees(args: string[] = []): Promise<void> {
       }
     }
 
-    // Summary
     console.log('─'.repeat(50));
     console.log(`✓ Cleanup complete: ${successCount} removed, ${failCount} failed`);
     

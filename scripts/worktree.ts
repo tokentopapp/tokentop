@@ -11,6 +11,7 @@ import { listWorktrees } from './worktree/commands/list.ts';
 import { removeWorktree } from './worktree/commands/remove.ts';
 import { statusWorktrees } from './worktree/commands/status.ts';
 import { switchWorktree } from './worktree/commands/switch.ts';
+import { cleanupWorktrees } from './worktree/commands/cleanup.ts';
 
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   create: createWorktree,
@@ -18,9 +19,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   remove: removeWorktree,
   status: statusWorktrees,
   switch: switchWorktree,
-  cleanup: async (args) => {
-    console.log('cleanup command stub:', args);
-  },
+  cleanup: cleanupWorktrees,
 };
 
 function printHelp() {
@@ -37,7 +36,13 @@ Commands:
   remove <branch>         Remove a worktree
   status                  Show worktree status
   switch <branch>         Switch to a worktree
-  cleanup                 Clean up stale worktrees
+  cleanup                 Clean up merged or stale worktrees
+
+Cleanup Options:
+  --dry-run               Preview what would be removed without removing
+  --stale-days <days>     Days of inactivity to consider stale (default: 30)
+  --force                 Skip confirmation prompt
+  --delete-branches       Also delete merged git branches
 
 Options:
   -h, --help              Show this help message
@@ -48,7 +53,8 @@ Examples:
   bun run worktree list
   bun run worktree remove feature/new-ui
   bun run worktree switch feature/new-ui
-  bun run worktree cleanup
+  bun run worktree cleanup --dry-run
+  bun run worktree cleanup --stale-days 7 --delete-branches
 `);
 }
 
