@@ -157,7 +157,7 @@ export function SessionDetailsDrawer({ session, onClose: _onClose }: SessionDeta
         <text height={1} fg={colors.textMuted}>[Esc] Close</text>
       </box>
       
-      <box flexDirection="column" height={5} marginBottom={1}>
+      <box flexDirection="column" height={6} marginBottom={1}>
         <box flexDirection="row" height={1} justifyContent="space-between">
           <text height={1} overflow="hidden">
             <span fg={colors.textMuted}>ID: </span>
@@ -170,6 +170,15 @@ export function SessionDetailsDrawer({ session, onClose: _onClose }: SessionDeta
             </span>
           </text>
         </box>
+
+        {session.sessionName && (
+          <box flexDirection="row" height={1}>
+            <text height={1} overflow="hidden">
+              <span fg={colors.textMuted}>Name: </span>
+              <span fg={colors.primary}><strong>{session.sessionName}</strong></span>
+            </text>
+          </box>
+        )}
 
         <box flexDirection="row" height={1} justifyContent="space-between">
           <text height={1} overflow="hidden">

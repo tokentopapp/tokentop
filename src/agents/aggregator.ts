@@ -45,6 +45,7 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
   const { agentId, agentName, rows, now = Date.now(), activeThresholdMs = ACTIVE_THRESHOLD_MS } = options;
 
   const sessionMap = new Map<string, {
+    sessionName?: string;
     projectPath?: string;
     timestamps: number[];
     sessionUpdatedAt?: number;
@@ -55,6 +56,7 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     const existing = sessionMap.get(row.sessionId);
     if (!existing) {
       const newSession: {
+        sessionName?: string;
         projectPath?: string;
         timestamps: number[];
         sessionUpdatedAt?: number;
@@ -63,6 +65,7 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
         timestamps: [],
         streamMap: new Map(),
       };
+      if (row.sessionName) newSession.sessionName = row.sessionName;
       if (row.projectPath) newSession.projectPath = row.projectPath;
       if (row.sessionUpdatedAt) newSession.sessionUpdatedAt = row.sessionUpdatedAt;
       sessionMap.set(row.sessionId, newSession);
@@ -71,6 +74,9 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     const session = sessionMap.get(row.sessionId)!;
 
     session.timestamps.push(row.timestamp);
+    if (row.sessionName && !session.sessionName) {
+      session.sessionName = row.sessionName;
+    }
     if (row.projectPath && !session.projectPath) {
       session.projectPath = row.projectPath;
     }
@@ -129,6 +135,7 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
       requestCount: totalRequestCount,
       streams,
     };
+    if (session.sessionName) aggregate.sessionName = session.sessionName;
     if (session.projectPath) aggregate.projectPath = session.projectPath;
     results.push(aggregate);
   }

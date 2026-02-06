@@ -28,6 +28,7 @@ export interface AgentSessionStream {
 
 export interface AgentSessionAggregate {
   sessionId: string;
+  sessionName?: string;
   agentId: AgentId;
   agentName: AgentName;
   projectPath?: string;

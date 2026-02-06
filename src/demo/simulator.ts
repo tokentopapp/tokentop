@@ -52,6 +52,7 @@ export const DEMO_PRESETS: Record<DemoPreset, DemoPresetConfig> = {
 
 export interface DemoSessionSeed {
   sessionId: string;
+  sessionName?: string;
   agentId: 'opencode' | 'claude-code' | 'cursor';
   agentName: 'OpenCode' | 'Claude Code' | 'Cursor';
   projectPath: string;
@@ -65,6 +66,7 @@ export interface DemoSessionSeed {
 const DEFAULT_SESSIONS: DemoSessionSeed[] = [
   {
     sessionId: 'demo-opencode-1',
+    sessionName: 'Implement dashboard view with real-time updates',
     agentId: 'opencode',
     agentName: 'OpenCode',
     projectPath: '/Users/demo/workspace/tokentop',
@@ -75,6 +77,7 @@ const DEFAULT_SESSIONS: DemoSessionSeed[] = [
   },
   {
     sessionId: 'demo-opencode-2',
+    sessionName: 'Fix Kubernetes deployment configuration',
     agentId: 'opencode',
     agentName: 'OpenCode',
     projectPath: '/Users/demo/workspace/infra',
@@ -85,6 +88,7 @@ const DEFAULT_SESSIONS: DemoSessionSeed[] = [
   },
   {
     sessionId: 'demo-claude-1',
+    sessionName: 'Add authentication flow to mobile app',
     agentId: 'claude-code',
     agentName: 'Claude Code',
     projectPath: '/Users/demo/workspace/mobile',
@@ -95,6 +99,7 @@ const DEFAULT_SESSIONS: DemoSessionSeed[] = [
   },
   {
     sessionId: 'demo-cursor-1',
+    sessionName: 'Refactor API endpoints for better performance',
     agentId: 'cursor',
     agentName: 'Cursor',
     projectPath: '/Users/demo/workspace/webapp',
@@ -105,6 +110,7 @@ const DEFAULT_SESSIONS: DemoSessionSeed[] = [
   },
   {
     sessionId: 'demo-opencode-old-1',
+    sessionName: 'Migrate legacy API to REST v2',
     agentId: 'opencode',
     agentName: 'OpenCode',
     projectPath: '/Users/demo/workspace/legacy-api',
@@ -116,6 +122,7 @@ const DEFAULT_SESSIONS: DemoSessionSeed[] = [
   },
   {
     sessionId: 'demo-claude-old-1',
+    sessionName: 'Update documentation with new API examples',
     agentId: 'claude-code',
     agentName: 'Claude Code',
     projectPath: '/Users/demo/workspace/docs-site',
@@ -261,7 +268,7 @@ export class DemoSimulator {
         ? startedAt + this.rng.range(30, 120) * 60 * 1000
         : now - this.rng.range(10_000, 50_000);
 
-      const baseSession = {
+      const baseSession: Omit<AgentSessionAggregate, 'endedAt'> = {
         sessionId: seedSession.sessionId,
         agentId: seedSession.agentId,
         agentName: seedSession.agentName,
@@ -278,7 +285,10 @@ export class DemoSimulator {
         totalCostUsd: cost,
         requestCount: Math.max(1, Math.floor(tokens / 700)),
         streams,
-      } satisfies Omit<AgentSessionAggregate, 'endedAt'>;
+      };
+      if (seedSession.sessionName) {
+        baseSession.sessionName = seedSession.sessionName;
+      }
 
       return isInactive
         ? { ...baseSession, endedAt: lastActivityAt }

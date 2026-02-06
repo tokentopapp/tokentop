@@ -5,25 +5,25 @@
     {
       "name": "test-feature",
       "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/test-feature",
-      "branch": "feature/test-feature",
+      "branch": "unknown",
       "createdAt": "2026-02-06T06:03:42.874Z",
-      "lastActivity": "2026-02-06T06:03:42.874Z",
+      "lastActivity": "2026-02-06T06:08:08.744Z",
       "gitStatus": "clean"
     },
     {
       "name": "fix-bug-123",
       "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/fix-bug-123",
-      "branch": "fix/fix-bug-123",
+      "branch": "unknown",
       "createdAt": "2026-02-06T06:03:55.167Z",
-      "lastActivity": "2026-02-06T06:03:55.167Z",
+      "lastActivity": "2026-02-06T06:08:13.843Z",
       "gitStatus": "clean"
     },
     {
       "name": "refactor-api",
       "path": "/Users/nigel/development/experiments/model-usage-app/.tokentop-worktrees/refactor-api",
-      "branch": "refactor/refactor-api",
+      "branch": "unknown",
       "createdAt": "2026-02-06T06:03:59.452Z",
-      "lastActivity": "2026-02-06T06:03:59.452Z",
+      "lastActivity": "2026-02-06T06:08:35.851Z",
       "gitStatus": "clean"
     },
     {
@@ -43,5 +43,5 @@
       "gitStatus": "clean"
     }
   ],
-  "updatedAt": "2026-02-06T06:05:48.033Z"
+  "updatedAt": "2026-02-06T06:08:35.852Z"
 }

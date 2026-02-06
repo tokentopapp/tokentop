@@ -38,6 +38,7 @@ export interface SessionParseOptions {
 
 export interface SessionUsageData {
   sessionId: string;
+  sessionName?: string;
   providerId: string;
   modelId: string;
   tokens: {

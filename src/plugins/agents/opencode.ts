@@ -440,6 +440,9 @@ export const opencodeAgentPlugin: AgentPlugin = {
           sessionUpdatedAt: session.time.updated,
         };
 
+        if (session.title) {
+          usage.sessionName = session.title;
+        }
         if (message.tokens.cache?.read) {
           usage.tokens.cacheRead = message.tokens.cache.read;
         }

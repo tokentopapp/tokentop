@@ -4,28 +4,20 @@
  * Manages parallel development branches using git worktrees
  */
 
-import { parseArgs } from 'util';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { WORKTREE_DIR, STATE_FILE } from './worktree/config.ts';
+import { createWorktree } from './worktree/commands/create.ts';
+import { listWorktrees } from './worktree/commands/list.ts';
+import { removeWorktree } from './worktree/commands/remove.ts';
+import { statusWorktrees } from './worktree/commands/status.ts';
+import { switchWorktree } from './worktree/commands/switch.ts';
 
-// Command handlers (stubs - to be implemented)
 const commands: Record<string, (args: string[]) => Promise<void>> = {
-  create: async (args) => {
-    console.log('create command stub:', args);
-  },
-  list: async (args) => {
-    console.log('list command stub:', args);
-  },
-  remove: async (args) => {
-    console.log('remove command stub:', args);
-  },
-  status: async (args) => {
-    console.log('status command stub:', args);
-  },
-  switch: async (args) => {
-    console.log('switch command stub:', args);
-  },
+  create: createWorktree,
+  list: listWorktrees,
+  remove: removeWorktree,
+  status: statusWorktrees,
+  switch: switchWorktree,
   cleanup: async (args) => {
     console.log('cleanup command stub:', args);
   },

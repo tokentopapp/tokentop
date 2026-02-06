@@ -97,7 +97,8 @@ export function RealTimeDashboard() {
       result = result.filter(s => 
         s.agentName.toLowerCase().includes(q) || 
         s.streams.some(st => st.modelId.toLowerCase().includes(q)) ||
-        (s.projectPath?.toLowerCase().includes(q) ?? false)
+        (s.projectPath?.toLowerCase().includes(q) ?? false) ||
+        (s.sessionName?.toLowerCase().includes(q) ?? false)
       );
     }
 
