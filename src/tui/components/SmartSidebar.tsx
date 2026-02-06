@@ -60,6 +60,12 @@ function formatCurrency(val: number): string {
   return `$${val.toFixed(2)}`;
 }
 
+/** Always shows 2 decimal places for budget displays where precision matters */
+function formatBudget(val: number): string {
+  if (val >= 1000) return `$${(val / 1000).toFixed(2)}k`;
+  return `$${val.toFixed(2)}`;
+}
+
 function formatDelta(val: number): string {
   if (val < 0.01) return '';
   if (val >= 10) return `+$${val.toFixed(1)}`;
@@ -200,7 +206,7 @@ function BudgetSection({ totalCost, budgetCost, mode, sidebarWidth }: BudgetSect
         <box flexDirection="row" height={1}>
           <text fg={colors.textMuted} height={1}>{budgetTypeLabel} </text>
           <text fg={statusColor} height={1}><strong>{formatPercent(budgetUsedPercent)}</strong></text>
-          <text fg={colors.textMuted} height={1}> {formatCurrency(budgetCost)}/{formatCurrency(activeBudget)}</text>
+          <text fg={colors.textMuted} height={1}> {formatBudget(budgetCost)}/{formatBudget(activeBudget)}</text>
         </box>
       </box>
     );
@@ -219,8 +225,8 @@ function BudgetSection({ totalCost, budgetCost, mode, sidebarWidth }: BudgetSect
       </box>
       
       <box flexDirection="row" height={1}>
-        <text fg={colors.text}><strong>{formatCurrency(budgetCost)}</strong></text>
-        <text fg={colors.textMuted}>/{formatCurrency(activeBudget)}</text>
+        <text fg={colors.text}><strong>{formatBudget(budgetCost)}</strong></text>
+        <text fg={colors.textMuted}>/{formatBudget(activeBudget)}</text>
       </box>
     </box>
   );
