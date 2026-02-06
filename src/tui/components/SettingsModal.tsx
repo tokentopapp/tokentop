@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
-import { useColors } from '../contexts/ThemeContext.tsx';
+import { useColors, useTheme } from '../contexts/ThemeContext.tsx';
+import { usePlugins } from '../contexts/PluginContext.tsx';
 import { useToastContext } from '../contexts/ToastContext.tsx';
 import { useConfig } from '../contexts/ConfigContext.tsx';
 import { useDemoMode } from '../contexts/DemoModeContext.tsx';
@@ -21,7 +22,7 @@ interface SettingItem {
   setValue: (config: AppConfig, value: string | number | boolean | null) => AppConfig;
 }
 
-const SETTINGS: SettingItem[] = [
+const BASE_SETTINGS: SettingItem[] = [
   {
     key: 'intervalMs',
     label: 'Refresh Interval',
@@ -206,6 +207,8 @@ interface SettingsModalProps {
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const colors = useColors();
+  const { setTheme } = useTheme();
+  const { themes } = usePlugins();
   const { showToast } = useToastContext();
   const { config, updateConfig, resetToDefaults, saveNow } = useConfig();
   const { demoMode, seed, preset } = useDemoMode();
@@ -222,7 +225,28 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const width = Math.min(termWidth - 4, 100);
   const height = Math.min(termHeight - 4, 28);
 
-  const categorySettings = SETTINGS.filter(s => s.category === selectedCategory);
+  const settings = useMemo(() => {
+    const newSettings = [...BASE_SETTINGS];
+    newSettings.push({
+      key: 'theme',
+      label: 'Theme',
+      category: 'display',
+      type: 'select',
+      options: themes.map(t => t.id),
+      getValue: (c) => c.display.theme,
+      setValue: (c, v) => ({ ...c, display: { ...c.display, theme: v as string } }),
+    });
+    return newSettings;
+  }, [themes]);
+
+  const categorySettings = settings.filter(s => s.category === selectedCategory);
+
+  const applyThemeChange = useCallback((themeId: string) => {
+    const newTheme = themes.find(t => t.id === themeId);
+    if (newTheme) {
+      setTheme(newTheme);
+    }
+  }, [themes, setTheme]);
 
   useEffect(() => {
     setInputFocused(true);
@@ -285,13 +309,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     } else if (setting.type === 'select' && setting.options) {
       const currentIdx = setting.options.indexOf(currentValue as string);
       const nextIdx = (currentIdx + 1) % setting.options.length;
-      newConfig = setting.setValue(config, setting.options[nextIdx]!);
+      const newValue = setting.options[nextIdx]!;
+      newConfig = setting.setValue(config, newValue);
+
+      if (setting.key === 'theme') {
+        applyThemeChange(newValue);
+      }
     } else {
       return;
     }
 
     updateConfig(newConfig);
-  }, [categorySettings, selectedIndex, config, updateConfig]);
+  }, [categorySettings, selectedIndex, config, updateConfig, applyThemeChange]);
 
   useKeyboard((key) => {
     if (editingSettingKey !== null) {
@@ -371,7 +400,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           const currentValue = setting.getValue(config) as string;
           const currentIdx = setting.options.indexOf(currentValue);
           const prevIdx = (currentIdx - 1 + setting.options.length) % setting.options.length;
-          updateConfig(setting.setValue(config, setting.options[prevIdx]!));
+          const newValue = setting.options[prevIdx]!;
+          updateConfig(setting.setValue(config, newValue));
+          if (setting.key === 'theme') {
+            applyThemeChange(newValue);
+          }
         }
       } else if (key.name === 'right' || key.name === 'l') {
         const setting = categorySettings[selectedIndex];
@@ -379,7 +412,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           const currentValue = setting.getValue(config) as string;
           const currentIdx = setting.options.indexOf(currentValue);
           const nextIdx = (currentIdx + 1) % setting.options.length;
-          updateConfig(setting.setValue(config, setting.options[nextIdx]!));
+          const newValue = setting.options[nextIdx]!;
+          updateConfig(setting.setValue(config, newValue));
+          if (setting.key === 'theme') {
+            applyThemeChange(newValue);
+          }
         }
       }
     }

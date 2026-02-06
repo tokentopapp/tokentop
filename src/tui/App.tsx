@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useKeyboard } from '@opentui/react';
 
 import { captureFrameToFile, createBurstRecorder, type BurstRecorder } from './debug/captureFrame.ts';
-import { ThemeProvider, useColors } from './contexts/ThemeContext.tsx';
+import { ThemeProvider, useColors, useTheme } from './contexts/ThemeContext.tsx';
 import { PluginProvider, usePlugins } from './contexts/PluginContext.tsx';
 import { LogProvider, useLogs } from './contexts/LogContext.tsx';
 import { InputProvider, useInputFocus } from './contexts/InputContext.tsx';
@@ -44,7 +44,8 @@ type View = 'dashboard' | 'providers' | 'trends' | 'projects';
 function AppContent() {
   const renderer = useSafeRenderer();
   const colors = useColors();
-  const { refreshAllProviders, isInitialized } = usePlugins();
+  const { setTheme } = useTheme();
+  const { refreshAllProviders, isInitialized, themes } = usePlugins();
   const { info } = useLogs();
   const { toast, showToast, dismissToast } = useToastContext();
   const { isInputFocused } = useInputFocus();
@@ -62,6 +63,7 @@ function AppContent() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [themeInitialized, setThemeInitialized] = useState(false);
 
   const isModalOpen = showCommandPalette || showSettings || showDebugPanel || isDrawerOpen;
 
@@ -210,6 +212,20 @@ function AppContent() {
       setShowDebugPanel(true);
     }
   });
+
+  useEffect(() => {
+    if (themes.length > 0 && config.display.theme && !themeInitialized) {
+      const matchedTheme = themes.find(t => t.id === config.display.theme);
+      if (matchedTheme) {
+        setTheme(matchedTheme);
+      } else {
+        // Fallback to first theme if saved theme invalid
+        const firstTheme = themes[0];
+        if (firstTheme) setTheme(firstTheme);
+      }
+      setThemeInitialized(true);
+    }
+  }, [themes, config.display.theme, themeInitialized, setTheme]);
 
   useEffect(() => {
     if (isInitialized) {

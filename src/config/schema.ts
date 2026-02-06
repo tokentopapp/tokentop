@@ -39,6 +39,7 @@ export interface AppConfig {
     timeFormat: '12h' | '24h';
     numberFormat: 'full' | 'compact';
     sparkline: SparklineConfig;
+    theme: string;
   };
   notifications: {
     toastsEnabled: boolean;
@@ -58,18 +59,19 @@ export const DEFAULT_CONFIG: AppConfig = {
     pauseAutoRefresh: false,
     staleThresholdMs: 300000,
   },
-  display: {
-    defaultTimeWindow: '1h',
-    sidebarCollapsed: false,
-    compactMode: false,
-    timeFormat: '24h',
-    numberFormat: 'compact',
-    sparkline: {
-      style: 'braille',
-      orientation: 'up',
-      showBaseline: true,
-    },
-  },
+   display: {
+     defaultTimeWindow: '1h',
+     sidebarCollapsed: false,
+     compactMode: false,
+     timeFormat: '24h',
+     numberFormat: 'compact',
+     sparkline: {
+       style: 'braille',
+       orientation: 'up',
+       showBaseline: true,
+     },
+     theme: 'tokyo-night',
+   },
   notifications: {
     toastsEnabled: true,
     soundEnabled: false,
