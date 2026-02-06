@@ -134,7 +134,7 @@ async function processPartFile(partPath: string): Promise<void> {
   activityWatcher.seenParts.add(partPath);
 
   const part = await readJsonFile<OpenCodePart>(partPath);
-  if (!part || part.type !== 'step-finish' || !part.tokens) return;
+  if (!part || !part.tokens) return;
 
   const callback = activityWatcher.callback;
   if (!callback) return;

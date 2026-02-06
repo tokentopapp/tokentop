@@ -150,10 +150,11 @@ export function useEmaActivity(totalTokens: number): UseActivityRateResult {
     const deltaTokens = Math.max(0, totalTokens - prevTokens);
     const rawDt = (now - stateRef.current.lastTokenTime) / 1000;
     
-    // Require minimum 0.5s between rate calculations, but DON'T reset the timer
-    // This allows the time to accumulate until threshold is reached
+    // Require minimum 0.5s between rate calculations
+    // DON'T update lastTokens here — that would silently consume the delta
+    // without ever writing it to buckets. Let the delta accumulate until
+    // enough time has passed for a proper rate calculation.
     if (rawDt < 0.5) {
-      stateRef.current.lastTokens = totalTokens;
       return;
     }
     
