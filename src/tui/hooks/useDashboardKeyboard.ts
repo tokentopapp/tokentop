@@ -178,10 +178,18 @@ export function useDashboardKeyboard({
       return;
     }
 
-    if (key.name === 'tab') {
+    if (key.name === 'tab' && !key.shift) {
       actions.setFocusedPanel(curr => {
         if (curr === 'sessions') return 'limits';
         if (curr === 'limits') return 'sidebar';
+        return 'sessions';
+      });
+      return;
+    }
+    if (key.name === 'tab' && key.shift) {
+      actions.setFocusedPanel(curr => {
+        if (curr === 'sessions') return 'sidebar';
+        if (curr === 'sidebar') return 'limits';
         return 'sessions';
       });
       return;

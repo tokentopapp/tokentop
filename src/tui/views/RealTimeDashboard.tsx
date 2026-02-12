@@ -368,10 +368,10 @@ export function RealTimeDashboard() {
           {isFiltering ? 'Type to filter  Esc cancel  Enter apply' : 
            filterQuery ? `Esc clear  / edit filter  ↑↓ navigate  s sort` :
            activeDriverFilter ? `Filter: ${activeDriverFilter}  Esc clear` :
-           focusedPanel === 'sessions' ? '/ filter  ↑↓ navigate  Enter details  s sort  l limits' :
-           focusedPanel === 'limits' ? '←→ select provider  Tab next  Esc back' :
-           focusedPanel === 'sidebar' ? '↑↓ select  Enter filter  m/p/a dimension  Tab back' :
-           '/ filter  i sidebar  Tab switch  ? help'}
+           focusedPanel === 'sessions' ? '/ filter  ↑↓ navigate  Enter details  s sort  l limits  Tab next  ⇧Tab prev' :
+           focusedPanel === 'limits' ? '←→ select provider  Tab next  ⇧Tab prev  Esc back' :
+           focusedPanel === 'sidebar' ? '↑↓ select  Enter filter  m/p/a dimension  Tab next  ⇧Tab prev' :
+           '/ filter  i sidebar  Tab/⇧Tab switch  ? help'}
         </text>
       </box>
     </box>
