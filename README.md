@@ -28,7 +28,7 @@ Real-time terminal monitoring of LLM token usage and spending across providers a
 
 You're coding with AI agents all day. Claude Code, OpenCode, Cursor — they're burning through tokens and you have no idea how fast.
 
-You check the Anthropic dashboard. It's 24 hours behind. You check OpenAI. Different dashboard, different login. Want to see it all in one place? In real time? In your terminal, where you already live?
+You check the Anthropic dashboard. It's hours behind. You check OpenAI. Different dashboard, different login. Want to see it all in one place? In real time? In your terminal, where you already live?
 
 That's tokentop.
 
