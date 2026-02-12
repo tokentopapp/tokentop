@@ -9,6 +9,9 @@ import { useConfig } from '../contexts/ConfigContext.tsx';
 import { useDashboardRuntime } from '../contexts/DashboardRuntimeContext.tsx';
 import { useDrawer } from '../contexts/DrawerContext.tsx';
 import { useDashboardKeyboard } from '../hooks/useDashboardKeyboard.ts';
+import { useStorageReady } from '../contexts/StorageContext.tsx';
+import { useDemoMode } from '../contexts/DemoModeContext.tsx';
+import { getTotalUsageInWindow } from '@/storage/repos/usageEvents.ts';
 
 import { KpiStrip } from '../components/KpiStrip.tsx';
 import { SessionsTable } from '../components/SessionsTable.tsx';
@@ -24,6 +27,8 @@ export function RealTimeDashboard() {
   const { height: terminalHeight, width: terminalWidth } = useTerminalDimensions();
   const { config } = useConfig();
   const { activity, sparkData, deltas } = useDashboardRuntime();
+  const isStorageReady = useStorageReady();
+  const { demoMode } = useDemoMode();
 
   const showLargeHeader = terminalHeight >= 35;
   const showProviderLimitsPanel = terminalHeight >= 24;
@@ -256,13 +261,19 @@ export function RealTimeDashboard() {
 
   const budgetPeriodCost = useMemo(() => {
     const now = new Date();
+    const nowMs = now.getTime();
     
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    
     const dayOfWeek = now.getDay();
     const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek).getTime();
-    
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    if (!demoMode && isStorageReady) {
+      const daily = getTotalUsageInWindow(startOfDay, nowMs);
+      const weekly = getTotalUsageInWindow(startOfWeek, nowMs);
+      const monthly = getTotalUsageInWindow(startOfMonth, nowMs);
+      return { daily: daily.costUsd, weekly: weekly.costUsd, monthly: monthly.costUsd };
+    }
 
     let dailyCost = 0;
     let weeklyCost = 0;
@@ -270,15 +281,15 @@ export function RealTimeDashboard() {
 
     for (const session of agentSessions) {
       const cost = session.totalCostUsd ?? 0;
-      const activityTime = session.lastActivityAt;
+      const startedAt = session.startedAt ?? session.lastActivityAt;
       
-      if (activityTime >= startOfDay) dailyCost += cost;
-      if (activityTime >= startOfWeek) weeklyCost += cost;
-      if (activityTime >= startOfMonth) monthlyCost += cost;
+      if (startedAt >= startOfDay) dailyCost += cost;
+      if (startedAt >= startOfWeek) weeklyCost += cost;
+      if (startedAt >= startOfMonth) monthlyCost += cost;
     }
 
     return { daily: dailyCost, weekly: weeklyCost, monthly: monthlyCost };
-  }, [agentSessions]);
+  }, [agentSessions, demoMode, isStorageReady]);
 
   const getBudgetCost = () => {
     switch (budgetType) {
