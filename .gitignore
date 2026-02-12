@@ -63,6 +63,5 @@ snapshots/
 golden/
 recordings/
 
-# Worktrees (ignore all except state.json)
-.worktrees/*
-!.worktrees/state.json
+# Worktrees
+.worktrees/
