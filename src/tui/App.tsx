@@ -37,6 +37,7 @@ interface AppProps {
   demoMode?: boolean;
   demoSeed?: number;
   demoPreset?: DemoPreset;
+  cliPlugins?: string[];
 }
 
 type View = 'dashboard' | 'providers' | 'trends' | 'projects';
@@ -306,7 +307,7 @@ function AppContent() {
   );
 }
 
-function ConfiguredApp() {
+function ConfiguredApp({ cliPlugins }: { cliPlugins?: string[] }) {
   const { config, isLoading } = useConfig();
 
   if (isLoading) {
@@ -316,7 +317,7 @@ function ConfiguredApp() {
   return (
     <TimeWindowProvider defaultWindow={config.display.defaultTimeWindow}>
       <ToastProvider>
-        <PluginProvider>
+        <PluginProvider {...(cliPlugins ? { cliPlugins } : {})}>
           <RealTimeActivityProvider>
             <AgentSessionProvider autoRefresh={true} refreshInterval={1000}>
               <DashboardRuntimeProvider>
@@ -332,7 +333,7 @@ function ConfiguredApp() {
   );
 }
 
-export function App({ initialTheme, debug = false, demoMode = false, demoSeed, demoPreset }: AppProps) {
+export function App({ initialTheme, debug = false, demoMode = false, demoSeed, demoPreset, cliPlugins }: AppProps) {
   const themeProviderProps = initialTheme ? { initialTheme } : {};
   const demoProviderProps: { demoMode: boolean; demoSeed?: number; demoPreset?: DemoPreset } = { demoMode };
   if (demoSeed !== undefined) demoProviderProps.demoSeed = demoSeed;
@@ -345,7 +346,7 @@ export function App({ initialTheme, debug = false, demoMode = false, demoSeed, d
           <StorageProvider>
             <ThemeProvider {...themeProviderProps}>
               <ConfigProvider>
-                <ConfiguredApp />
+                <ConfiguredApp {...(cliPlugins ? { cliPlugins } : {})} />
               </ConfigProvider>
             </ThemeProvider>
           </StorageProvider>

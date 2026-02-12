@@ -7,7 +7,8 @@ import type {
   ThemePlugin,
   NotificationPlugin,
 } from './types/index.ts';
-import { loadLocalPlugin, loadNpmPlugin, discoverLocalPlugins } from './loader.ts';
+import { loadLocalPlugin, loadNpmPlugin, discoverLocalPlugins, resolvePluginPath } from './loader.ts';
+import type { PluginsConfig } from '@/config/schema.ts';
 
 type PluginStore = {
   provider: Map<string, ProviderPlugin>;
@@ -117,10 +118,12 @@ class PluginRegistryImpl {
     }
   }
 
-  async loadLocalPlugins(): Promise<void> {
-    const pluginPaths = await discoverLocalPlugins();
+  async loadLocalPlugins(extraPaths: string[] = []): Promise<void> {
+    const discoveredPaths = await discoverLocalPlugins();
+    const resolvedExtraPaths = extraPaths.map(p => resolvePluginPath(p));
+    const allPaths = [...discoveredPaths, ...resolvedExtraPaths];
 
-    for (const pluginPath of pluginPaths) {
+    for (const pluginPath of allPaths) {
       const result = await loadLocalPlugin(pluginPath);
       if (result.success && result.plugin) {
         this.register(result.plugin);
@@ -143,27 +146,37 @@ class PluginRegistryImpl {
     }
   }
 
+  disablePlugin(type: PluginType, id: string): boolean {
+    return this.plugins[type].delete(id);
+  }
+
   async initialize(config?: {
-    npmPlugins?: {
-      providers?: string[];
-      agents?: string[];
-      themes?: string[];
-      notifications?: string[];
-    };
+    plugins?: Partial<PluginsConfig>;
+    cliPlugins?: string[];
   }): Promise<void> {
     if (this.initialized) return;
 
     await this.loadBuiltinPlugins();
-    await this.loadLocalPlugins();
 
-    if (config?.npmPlugins) {
-      const allNpmPlugins = [
-        ...(config.npmPlugins.providers ?? []),
-        ...(config.npmPlugins.agents ?? []),
-        ...(config.npmPlugins.themes ?? []),
-        ...(config.npmPlugins.notifications ?? []),
-      ];
-      await this.loadNpmPlugins(allNpmPlugins);
+    const localPaths = [
+      ...(config?.plugins?.local ?? []),
+      ...(config?.cliPlugins ?? []),
+    ];
+    await this.loadLocalPlugins(localPaths);
+
+    const npmPackages = config?.plugins?.npm ?? [];
+    if (npmPackages.length > 0) {
+      await this.loadNpmPlugins(npmPackages);
+    }
+
+    const disabled = config?.plugins?.disabled ?? [];
+    for (const pluginId of disabled) {
+      for (const type of ['provider', 'agent', 'theme', 'notification'] as PluginType[]) {
+        if (this.has(type, pluginId)) {
+          this.disablePlugin(type, pluginId);
+          console.info(`Disabled plugin: ${pluginId}`);
+        }
+      }
     }
 
     this.initialized = true;

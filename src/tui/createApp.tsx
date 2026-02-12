@@ -13,6 +13,7 @@ export interface CreateAppOptions {
   demoMode?: boolean;
   demoSeed?: number;
   demoPreset?: DemoPreset;
+  cliPlugins?: string[];
 }
 
 export const DEFAULT_APP_OPTIONS = {
@@ -33,6 +34,7 @@ export function createAppElement(options: CreateAppOptions = {}): ReactNode {
       demoMode={options.demoMode ?? DEFAULT_APP_OPTIONS.demoMode}
       {...(options.demoSeed !== undefined ? { demoSeed: options.demoSeed } : {})}
       {...(options.demoPreset !== undefined ? { demoPreset: options.demoPreset } : {})}
+      {...(options.cliPlugins ? { cliPlugins: options.cliPlugins } : {})}
     />
   );
   

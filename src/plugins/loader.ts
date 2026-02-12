@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import * as os from 'os';
 import * as path from 'path';
 import type {
   PluginType,
@@ -92,9 +93,76 @@ export async function validatePlugin(plugin: unknown): Promise<PluginValidationR
   return { valid: errors.length === 0, errors, warnings };
 }
 
+function expandTilde(filePath: string): string {
+  if (filePath.startsWith('~/') || filePath === '~') {
+    return path.join(os.homedir(), filePath.slice(1));
+  }
+  return filePath;
+}
+
+async function resolvePluginEntryPoint(dirPath: string): Promise<string | null> {
+  try {
+    const pkgJsonPath = path.join(dirPath, 'package.json');
+    const pkgContent = await fs.readFile(pkgJsonPath, 'utf-8');
+    const pkg = JSON.parse(pkgContent) as Record<string, unknown>;
+
+    if (typeof pkg.main === 'string') {
+      return path.resolve(dirPath, pkg.main);
+    }
+
+    if (pkg.exports && typeof pkg.exports === 'object') {
+      const exports = pkg.exports as Record<string, unknown>;
+      const root = exports['.'];
+      if (typeof root === 'string') return path.resolve(dirPath, root);
+      if (root && typeof root === 'object') {
+        const rootObj = root as Record<string, unknown>;
+        const entry = rootObj.import ?? rootObj.default;
+        if (typeof entry === 'string') return path.resolve(dirPath, entry);
+      }
+    }
+  } catch {
+    // no package.json — try convention-based entry points
+  }
+
+  const candidates = ['src/index.ts', 'src/index.js', 'index.ts', 'index.js', 'dist/index.js'];
+  for (const candidate of candidates) {
+    const candidatePath = path.join(dirPath, candidate);
+    try {
+      await fs.access(candidatePath);
+      return candidatePath;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export function resolvePluginPath(rawPath: string, relativeTo?: string): string {
+  const expanded = expandTilde(rawPath);
+  if (path.isAbsolute(expanded)) return expanded;
+  const base = relativeTo ?? PATHS.config.dir;
+  return path.resolve(base, expanded);
+}
+
 export async function loadLocalPlugin(filePath: string): Promise<PluginLoadResult<AnyPlugin>> {
   try {
-    const module = await import(filePath);
+    let importPath = filePath;
+
+    const stat = await fs.stat(filePath);
+    if (stat.isDirectory()) {
+      const entryPoint = await resolvePluginEntryPoint(filePath);
+      if (!entryPoint) {
+        return {
+          success: false,
+          error: `Directory "${filePath}" has no recognizable entry point (checked package.json main/exports, src/index.ts, index.ts)`,
+          source: 'local',
+        };
+      }
+      importPath = entryPoint;
+    }
+
+    const module = await import(importPath);
     const plugin = module.default ?? module.plugin ?? module;
 
     const validation = await validatePlugin(plugin);
@@ -172,9 +240,22 @@ export async function discoverLocalPlugins(): Promise<string[]> {
   }
 
   const entries = await fs.readdir(CUSTOM_PLUGINS_DIR, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.js')))
-    .map((entry) => path.join(CUSTOM_PLUGINS_DIR, entry.name));
+  const results: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(CUSTOM_PLUGINS_DIR, entry.name);
+
+    if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.js'))) {
+      results.push(fullPath);
+    } else if (entry.isDirectory()) {
+      const entryPoint = await resolvePluginEntryPoint(fullPath);
+      if (entryPoint) {
+        results.push(fullPath);
+      }
+    }
+  }
+
+  return results;
 }
 
 export { CUSTOM_PLUGINS_DIR };

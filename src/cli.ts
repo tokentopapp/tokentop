@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import * as path from 'path';
 import { startTui, type TuiOptions } from './tui/index.tsx';
 import { tokyoNightTheme } from './plugins/themes/tokyo-night.ts';
 import { draculaTheme } from './plugins/themes/dracula.ts';
@@ -28,6 +29,7 @@ Commands:
 Options:
   -t, --theme <name>      Theme to use (tokyo-night, dracula, nord)
   -r, --refresh <ms>      Refresh interval in milliseconds (default: 60000)
+  -p, --plugin <path>     Load a local plugin (file or directory, repeatable)
   -d, --debug             Enable debug mode (verbose logging)
   -h, --help              Show this help message
   -v, --version           Show version
@@ -52,6 +54,7 @@ Examples:
   ttop                        Start with default theme
   ttop -t dracula             Start with Dracula theme
   ttop -r 30000               Refresh every 30 seconds
+  ttop -p ./my-plugin         Load a local plugin from a directory
   ttop -d                     Start with debug logging enabled
   ttop demo                   Start in demo mode
   ttop demo --seed 42         Demo mode with seed 42 (reproducible)
@@ -76,6 +79,7 @@ async function main() {
   let demo = false;
   let demoSeed: number | undefined;
   let demoPreset: DemoPreset | undefined;
+  const cliPlugins: string[] = [];
 
   // Handle demo subcommand
   if (subcommand === 'demo') {
@@ -101,6 +105,16 @@ async function main() {
 
     if (arg === '-d' || arg === '--debug') {
       debug = true;
+    }
+
+    if (arg === '-p' || arg === '--plugin') {
+      const pluginPath = commandArgs[++i];
+      if (!pluginPath) {
+        console.error('Error: --plugin requires a path');
+        process.exit(1);
+      }
+      const resolved = path.resolve(pluginPath);
+      cliPlugins.push(resolved);
     }
 
     // Demo subcommand options
@@ -162,6 +176,9 @@ async function main() {
     debug,
     demo,
   };
+  if (cliPlugins.length > 0) {
+    launchOptions.cliPlugins = cliPlugins;
+  }
   if (demoSeed !== undefined) {
     launchOptions.demoSeed = demoSeed;
   }

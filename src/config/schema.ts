@@ -25,6 +25,12 @@ export interface SparklineConfig {
   showBaseline: boolean;
 }
 
+export interface PluginsConfig {
+  local: string[];
+  npm: string[];
+  disabled: string[];
+}
+
 export interface AppConfig {
   configVersion: number;
   refresh: {
@@ -49,6 +55,7 @@ export interface AppConfig {
   providers: {
     hideUnconfigured: boolean;
   };
+  plugins: PluginsConfig;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -87,6 +94,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   providers: {
     hideUnconfigured: false,
   },
+  plugins: {
+    local: [],
+    npm: [],
+    disabled: [],
+  },
 };
 
 function deepMerge(target: AppConfig, source: Partial<AppConfig>): AppConfig {
@@ -119,6 +131,10 @@ function deepMerge(target: AppConfig, source: Partial<AppConfig>): AppConfig {
     providers: {
       ...target.providers,
       ...(source.providers ?? {}),
+    },
+    plugins: {
+      ...target.plugins,
+      ...(source.plugins ?? {}),
     },
   };
 }

@@ -9,6 +9,7 @@ import { useLogs } from './LogContext.tsx';
 import { useStorage } from './StorageContext.tsx';
 import type { ProviderSnapshotInsert } from '@/storage/types.ts';
 import { useDemoMode } from './DemoModeContext.tsx';
+import { useConfig } from './ConfigContext.tsx';
 import type { Credentials } from '@/plugins/types/provider.ts';
 
 export interface UsageSnapshot {
@@ -67,9 +68,10 @@ function addToHistory(history: UsageSnapshot[], snapshot: UsageSnapshot): UsageS
 
 interface PluginProviderProps {
   children: ReactNode;
+  cliPlugins?: string[];
 }
 
-export function PluginProvider({ children }: PluginProviderProps) {
+export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [providers, setProviders] = useState<Map<string, ProviderState>>(new Map());
   const [themes, setThemes] = useState<ThemePlugin[]>([]);
@@ -77,6 +79,7 @@ export function PluginProvider({ children }: PluginProviderProps) {
   const { demoMode, simulator } = useDemoMode();
   const { debug, info, warn, error: logError } = useLogs();
   const { isReady: storageReady, recordProviderSnapshots } = useStorage();
+  const { config } = useConfig();
 
   useEffect(() => {
     async function initialize() {
@@ -84,7 +87,13 @@ export function PluginProvider({ children }: PluginProviderProps) {
 
       try {
         if (!demoMode) {
-          await pluginRegistry.initialize();
+          const initConfig: { plugins?: typeof config.plugins; cliPlugins?: string[] } = {
+            plugins: config.plugins,
+          };
+          if (cliPlugins) {
+            initConfig.cliPlugins = cliPlugins;
+          }
+          await pluginRegistry.initialize(initConfig);
         } else {
           await pluginRegistry.loadBuiltinPlugins();
         }

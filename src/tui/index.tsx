@@ -11,6 +11,7 @@ export interface TuiOptions {
   demo?: boolean;
   demoSeed?: number;
   demoPreset?: DemoPreset;
+  cliPlugins?: string[];
 }
 
 export async function startTui(options: TuiOptions = {}) {
@@ -39,6 +40,9 @@ export async function startTui(options: TuiOptions = {}) {
   }
   if (options.demoPreset !== undefined) {
     appOptions.demoPreset = options.demoPreset;
+  }
+  if (options.cliPlugins !== undefined) {
+    appOptions.cliPlugins = options.cliPlugins;
   }
 
   root.render(createAppElement(appOptions));
