@@ -379,7 +379,7 @@ export function RealTimeDashboard() {
            activeDriverFilter ? `Filter: ${activeDriverFilter}  Esc clear` :
            focusedPanel === 'sessions' ? '/ filter  ↑↓ navigate  Enter details  s sort  l limits' :
            focusedPanel === 'limits' ? '←→ select provider  Tab next  Esc back' :
-           focusedPanel === 'sidebar' ? '↑↓ select  Enter filter  m/p/a dimension  Tab back' :
+           focusedPanel === 'sidebar' ? '↑↓ select  Enter filter  m/p/a dimension  b budget  Tab back' :
            '/ filter  i sidebar  Tab switch  ? help'}
         </text>
       </box>

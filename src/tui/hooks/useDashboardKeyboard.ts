@@ -81,7 +81,7 @@ export function useDashboardKeyboard({
   processedSessions,
 }: UseDashboardKeyboardProps) {
   const { setInputFocused } = useInputFocus();
-  const { cycleWindow } = useTimeWindow();
+  const { cycleWindow, cycleBudgetLock } = useTimeWindow();
   const { showToast } = useToastContext();
   const { refreshSessions } = useAgentSessions();
 
@@ -296,6 +296,11 @@ export function useDashboardKeyboard({
       } else if (key.name === 'a') {
         actions.setDriverDimension(() => 'agent');
         actions.setSelectedDriverIndex(() => 0);
+        return;
+      }
+      
+      if (key.name === 'b') {
+        cycleBudgetLock();
         return;
       }
       

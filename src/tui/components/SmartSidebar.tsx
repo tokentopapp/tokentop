@@ -125,7 +125,7 @@ interface BudgetSectionProps {
 function BudgetSection({ totalCost, budgetCost, mode, sidebarWidth }: BudgetSectionProps) {
   const colors = useColors();
   const { config } = useConfig();
-  const { budgetType, budgetTypeLabel } = useTimeWindow();
+  const { budgetType, budgetTypeLabel, budgetLock } = useTimeWindow();
   
   const activeBudget = budgetType === 'daily' ? config.budgets.daily
     : budgetType === 'weekly' ? config.budgets.weekly
@@ -162,7 +162,9 @@ function BudgetSection({ totalCost, budgetCost, mode, sidebarWidth }: BudgetSect
   const barWidth = Math.max(10, innerWidth - 6);
   const bar = makeProgressBar(budgetUsedPercent, barWidth);
   
-  const headerLabel = budgetType === 'none' ? 'TOTAL COST' : `${budgetTypeLabel.toUpperCase()} BUDGET`;
+  const isLocked = budgetLock !== 'sync';
+  const lockSuffix = isLocked ? ' [locked]' : '';
+  const headerLabel = budgetType === 'none' ? 'TOTAL COST' : `${budgetTypeLabel.toUpperCase()} BUDGET${lockSuffix}`;
   
   if (budgetType === 'none') {
     if (mode === 'micro') {

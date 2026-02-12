@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 
 export type TimeWindow = '5m' | '15m' | '1h' | '24h' | '7d' | '30d' | 'all';
 
@@ -43,6 +43,18 @@ export const BUDGET_TYPE_LABELS: Record<BudgetType, string> = {
   none: 'Total',
 };
 
+export type BudgetLock = BudgetType | 'sync';
+
+const BUDGET_LOCK_CYCLE: BudgetLock[] = ['sync', 'daily', 'weekly', 'monthly'];
+
+export const BUDGET_LOCK_LABELS: Record<BudgetLock, string> = {
+  sync: 'Sync',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  none: 'None',
+};
+
 interface TimeWindowContextValue {
   window: TimeWindow;
   setWindow: (w: TimeWindow) => void;
@@ -52,6 +64,10 @@ interface TimeWindowContextValue {
   getWindowStart: () => number | null;
   budgetType: BudgetType;
   budgetTypeLabel: string;
+  budgetLock: BudgetLock;
+  setBudgetLock: (lock: BudgetLock) => void;
+  cycleBudgetLock: () => void;
+  budgetLockLabel: string;
 }
 
 const TimeWindowContext = createContext<TimeWindowContextValue | null>(null);
@@ -69,6 +85,7 @@ function getNextWindow(current: TimeWindow): TimeWindow {
 
 export function TimeWindowProvider({ children, defaultWindow = '24h' }: TimeWindowProviderProps) {
   const [window, setWindowState] = useState<TimeWindow>(defaultWindow);
+  const [budgetLock, setBudgetLock] = useState<BudgetLock>('sync');
 
   const setWindow = useCallback((w: TimeWindow) => {
     setWindowState(w);
@@ -78,10 +95,19 @@ export function TimeWindowProvider({ children, defaultWindow = '24h' }: TimeWind
     setWindowState(getNextWindow);
   }, []);
 
+  const cycleBudgetLock = useCallback(() => {
+    setBudgetLock(current => {
+      const idx = BUDGET_LOCK_CYCLE.indexOf(current);
+      const nextIdx = (idx + 1) % BUDGET_LOCK_CYCLE.length;
+      return BUDGET_LOCK_CYCLE[nextIdx] as BudgetLock;
+    });
+  }, []);
+
   const windowMs = TIME_WINDOW_MS[window];
   const windowLabel = TIME_WINDOW_LABELS[window];
-  const budgetType = TIME_WINDOW_BUDGET_TYPE[window];
+  const budgetType = budgetLock === 'sync' ? TIME_WINDOW_BUDGET_TYPE[window] : budgetLock;
   const budgetTypeLabel = BUDGET_TYPE_LABELS[budgetType];
+  const budgetLockLabel = BUDGET_LOCK_LABELS[budgetLock];
 
   const getWindowStart = useCallback((): number | null => {
     const ms = TIME_WINDOW_MS[window];
@@ -89,7 +115,7 @@ export function TimeWindowProvider({ children, defaultWindow = '24h' }: TimeWind
     return Date.now() - ms;
   }, [window]);
 
-  const value: TimeWindowContextValue = {
+  const value: TimeWindowContextValue = useMemo(() => ({
     window,
     setWindow,
     cycleWindow,
@@ -98,7 +124,11 @@ export function TimeWindowProvider({ children, defaultWindow = '24h' }: TimeWind
     getWindowStart,
     budgetType,
     budgetTypeLabel,
-  };
+    budgetLock,
+    setBudgetLock,
+    cycleBudgetLock,
+    budgetLockLabel,
+  }), [window, setWindow, cycleWindow, windowMs, windowLabel, getWindowStart, budgetType, budgetTypeLabel, budgetLock, cycleBudgetLock, budgetLockLabel]);
 
   return (
     <TimeWindowContext.Provider value={value}>
