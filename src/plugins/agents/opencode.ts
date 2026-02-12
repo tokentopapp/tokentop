@@ -36,11 +36,151 @@ const CACHE_TTL_MS = 2000;
 /**
  * Per-session aggregate cache: avoids re-parsing messages for unchanged sessions.
  * Keyed by sessionId, invalidated when session's time.updated changes.
+ * LRU eviction: entries track lastAccessed time; evict oldest when exceeding MAX size.
  */
+const SESSION_AGGREGATE_CACHE_MAX = 10_000;
+
 const sessionAggregateCache = new Map<string, {
   updatedAt: number;
   usageRows: SessionUsageData[];
+  lastAccessed: number;
 }>();
+
+/**
+ * Evict least-recently-accessed entries from sessionAggregateCache when it exceeds max size.
+ */
+function evictSessionAggregateCache(): void {
+  if (sessionAggregateCache.size <= SESSION_AGGREGATE_CACHE_MAX) return;
+
+  const entries = Array.from(sessionAggregateCache.entries());
+  entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+
+  const toEvict = entries.length - SESSION_AGGREGATE_CACHE_MAX;
+  for (let i = 0; i < toEvict; i++) {
+    sessionAggregateCache.delete(entries[i]![0]);
+  }
+}
+
+/**
+ * Session metadata index: caches stat mtime per session file path.
+ * On refresh, we stat each file and only re-read JSON if mtime changed.
+ */
+const sessionMetadataIndex = new Map<string, {
+  mtimeMs: number;
+  session: OpenCodeSession;
+}>();
+
+/**
+ * Session directory watcher state: tracks dirty session file paths detected by fs.watch.
+ * On refresh, dirty paths are processed first (guaranteed changed),
+ * then non-dirty paths get stat-checked as fallback.
+ */
+interface SessionWatcherState {
+  /** Watchers on each project subdirectory under OPENCODE_SESSIONS_PATH */
+  projectWatchers: Map<string, fsSync.FSWatcher>;
+  /** Watcher on the root sessions directory (to detect new project dirs) */
+  rootWatcher: fsSync.FSWatcher | null;
+  /** Set of session file paths marked dirty by fs.watch events */
+  dirtyPaths: Set<string>;
+  /** Timer for periodic full reconciliation sweep */
+  reconciliationTimer: ReturnType<typeof setInterval> | null;
+  /** Whether the watcher has been started */
+  started: boolean;
+}
+
+const RECONCILIATION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+const sessionWatcher: SessionWatcherState = {
+  projectWatchers: new Map(),
+  rootWatcher: null,
+  dirtyPaths: new Set(),
+  reconciliationTimer: null,
+  started: false,
+};
+
+/** Flag to force full re-stat on next refresh (set by reconciliation timer) */
+let forceFullReconciliation = false;
+
+/**
+ * Watch a single project directory under OPENCODE_SESSIONS_PATH for session file changes.
+ */
+function watchProjectDir(projectDirPath: string): void {
+  if (sessionWatcher.projectWatchers.has(projectDirPath)) return;
+
+  try {
+    const watcher = fsSync.watch(projectDirPath, (_eventType, filename) => {
+      if (filename?.endsWith('.json')) {
+        const filePath = path.join(projectDirPath, filename);
+        sessionWatcher.dirtyPaths.add(filePath);
+      }
+    });
+    sessionWatcher.projectWatchers.set(projectDirPath, watcher);
+  } catch {
+    // Directory may not exist or be inaccessible
+  }
+}
+
+/**
+ * Start watching session storage directories for changes.
+ * Called lazily on first parseSessions invocation.
+ */
+function startSessionWatcher(): void {
+  if (sessionWatcher.started) return;
+  sessionWatcher.started = true;
+
+  // Watch root sessions dir for new project subdirectories
+  try {
+    sessionWatcher.rootWatcher = fsSync.watch(OPENCODE_SESSIONS_PATH, (eventType, filename) => {
+      if (eventType === 'rename' && filename) {
+        const projectDirPath = path.join(OPENCODE_SESSIONS_PATH, filename);
+        // Attempt to watch new project dirs as they appear
+        watchProjectDir(projectDirPath);
+      }
+    });
+  } catch {
+    // Sessions directory may not exist yet
+  }
+
+  // Watch existing project subdirectories
+  try {
+    const entries = fsSync.readdirSync(OPENCODE_SESSIONS_PATH, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        watchProjectDir(path.join(OPENCODE_SESSIONS_PATH, entry.name));
+      }
+    }
+  } catch {
+    // Sessions directory may not exist yet
+  }
+
+  // Periodic full reconciliation sweep every 10 minutes
+  sessionWatcher.reconciliationTimer = setInterval(() => {
+    forceFullReconciliation = true;
+  }, RECONCILIATION_INTERVAL_MS);
+}
+
+/**
+ * Stop all session directory watchers and clean up.
+ */
+function stopSessionWatcher(): void {
+  if (sessionWatcher.reconciliationTimer) {
+    clearInterval(sessionWatcher.reconciliationTimer);
+    sessionWatcher.reconciliationTimer = null;
+  }
+
+  for (const watcher of sessionWatcher.projectWatchers.values()) {
+    watcher.close();
+  }
+  sessionWatcher.projectWatchers.clear();
+
+  if (sessionWatcher.rootWatcher) {
+    sessionWatcher.rootWatcher.close();
+    sessionWatcher.rootWatcher = null;
+  }
+
+  sessionWatcher.dirtyPaths.clear();
+  sessionWatcher.started = false;
+}
 
 interface OpenCodeAuthEntry {
   type: 'api' | 'oauth' | 'codex' | 'github' | 'wellknown';
@@ -238,6 +378,8 @@ function stopActivityWatch(): void {
   activityWatcher.callback = null;
   activityWatcher.seenParts.clear();
   activityWatcher.pendingDirs.clear();
+
+  stopSessionWatcher();
 }
 
 function buildOAuthCredentials(
@@ -358,6 +500,8 @@ export const opencodeAgentPlugin: AgentPlugin = {
       return [];
     }
 
+    startSessionWatcher();
+
     const now = Date.now();
     if (
       !options.sessionId &&
@@ -369,8 +513,24 @@ export const opencodeAgentPlugin: AgentPlugin = {
       return sessionCache.lastResult;
     }
 
+    const dirtyPaths = new Set(sessionWatcher.dirtyPaths);
+    sessionWatcher.dirtyPaths.clear();
+
+    const needsFullStat = forceFullReconciliation;
+    if (forceFullReconciliation) {
+      forceFullReconciliation = false;
+      ctx.log.debug('Full reconciliation sweep triggered');
+    }
+
     const sessions: SessionUsageData[] = [];
     const sessionFiles: Array<{ path: string; session: OpenCodeSession }> = [];
+
+    let statCount = 0;
+    let statSkipCount = 0;
+    let parseCount = 0;
+    let dirtyHitCount = 0;
+
+    const seenFilePaths = new Set<string>();
 
     try {
       const projectDirs = await fs.readdir(OPENCODE_SESSIONS_PATH, { withFileTypes: true });
@@ -379,17 +539,61 @@ export const opencodeAgentPlugin: AgentPlugin = {
         if (!projectDir.isDirectory()) continue;
 
         const projectPath = path.join(OPENCODE_SESSIONS_PATH, projectDir.name);
+
+        watchProjectDir(projectPath);
+
         const sessionEntries = await fs.readdir(projectPath, { withFileTypes: true });
 
         for (const entry of sessionEntries) {
           if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
 
           const sessionFilePath = path.join(projectPath, entry.name);
+          seenFilePaths.add(sessionFilePath);
+
+          const isDirty = dirtyPaths.has(sessionFilePath);
+          if (isDirty) dirtyHitCount++;
+
+          const cached = sessionMetadataIndex.get(sessionFilePath);
+
+          // Skip stat for clean, non-reconciliation files with cached metadata
+          if (!isDirty && !needsFullStat && cached) {
+            statSkipCount++;
+            const session = cached.session;
+            if (session?.id) {
+              if (options.sessionId && session.id !== options.sessionId) continue;
+              sessionFiles.push({ path: sessionFilePath, session });
+            }
+            continue;
+          }
+
+          statCount++;
+          let mtimeMs: number;
+          try {
+            const stat = await fs.stat(sessionFilePath);
+            mtimeMs = stat.mtimeMs;
+          } catch {
+            sessionMetadataIndex.delete(sessionFilePath);
+            continue;
+          }
+
+          if (cached && cached.mtimeMs === mtimeMs) {
+            const session = cached.session;
+            if (session?.id) {
+              if (options.sessionId && session.id !== options.sessionId) continue;
+              sessionFiles.push({ path: sessionFilePath, session });
+            }
+            continue;
+          }
+
+          parseCount++;
           const session = await readJsonFile<OpenCodeSession>(sessionFilePath);
 
           if (session?.id) {
+            sessionMetadataIndex.set(sessionFilePath, { mtimeMs, session });
             if (options.sessionId && session.id !== options.sessionId) continue;
             sessionFiles.push({ path: sessionFilePath, session });
+          } else {
+            sessionMetadataIndex.delete(sessionFilePath);
           }
         }
       }
@@ -398,14 +602,27 @@ export const opencodeAgentPlugin: AgentPlugin = {
       return sessions;
     }
 
+    for (const cachedPath of sessionMetadataIndex.keys()) {
+      if (!seenFilePaths.has(cachedPath)) {
+        sessionMetadataIndex.delete(cachedPath);
+      }
+    }
+
     sessionFiles.sort((a, b) => b.session.time.updated - a.session.time.updated);
+
+    let aggregateCacheHits = 0;
+    let aggregateCacheMisses = 0;
 
     for (const { session } of sessionFiles) {
       const cached = sessionAggregateCache.get(session.id);
       if (cached && cached.updatedAt === session.time.updated) {
+        cached.lastAccessed = now;
+        aggregateCacheHits++;
         sessions.push(...cached.usageRows);
         continue;
       }
+
+      aggregateCacheMisses++;
 
       const messagesDir = path.join(OPENCODE_MESSAGES_PATH, session.id);
 
@@ -472,10 +689,13 @@ export const opencodeAgentPlugin: AgentPlugin = {
       sessionAggregateCache.set(session.id, {
         updatedAt: session.time.updated,
         usageRows: sessionUsageRows,
+        lastAccessed: now,
       });
 
       sessions.push(...sessionUsageRows);
     }
+
+    evictSessionAggregateCache();
 
     if (!options.sessionId) {
       sessionCache.lastCheck = Date.now();
@@ -483,7 +703,18 @@ export const opencodeAgentPlugin: AgentPlugin = {
       sessionCache.lastLimit = limit;
     }
 
-    ctx.log.debug('Parsed OpenCode sessions', { count: sessions.length });
+    ctx.log.debug('Parsed OpenCode sessions', {
+      count: sessions.length,
+      sessionFiles: sessionFiles.length,
+      statChecks: statCount,
+      statSkips: statSkipCount,
+      jsonParses: parseCount,
+      dirtyHits: dirtyHitCount,
+      aggregateCacheHits,
+      aggregateCacheMisses,
+      metadataIndexSize: sessionMetadataIndex.size,
+      aggregateCacheSize: sessionAggregateCache.size,
+    });
     return sessions;
   },
 

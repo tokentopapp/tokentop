@@ -23,6 +23,12 @@ interface AgentSessionContextValue {
 
 const AgentSessionContext = createContext<AgentSessionContextValue | null>(null);
 
+const sessionPersistenceFingerprints = new Map<string, string>();
+
+function sessionFingerprint(session: AgentSessionAggregate): string {
+  return `${session.lastActivityAt}:${session.totalCostUsd ?? 0}:${session.requestCount}`;
+}
+
 interface AgentSessionProviderProps {
   children: ReactNode;
   autoRefresh?: boolean;
@@ -155,7 +161,15 @@ export function AgentSessionProvider({
 
       if (storageReady) {
         const now = Date.now();
+        let persistedCount = 0;
         for (const session of pricedSessions) {
+          const fp = sessionFingerprint(session);
+          const prevFp = sessionPersistenceFingerprints.get(session.sessionId);
+          if (prevFp === fp) continue;
+
+          sessionPersistenceFingerprints.set(session.sessionId, fp);
+          persistedCount++;
+
           recordAgentSession(
             {
               agentId: session.agentId,
@@ -188,7 +202,7 @@ export function AgentSessionProvider({
             }))
           );
         }
-        debug(`Persisted ${pricedSessions.length} sessions to storage`, undefined, 'agent-sessions');
+        debug(`Persisted ${persistedCount}/${pricedSessions.length} changed sessions to storage`, undefined, 'agent-sessions');
       }
 
       setSessions(pricedSessions);
