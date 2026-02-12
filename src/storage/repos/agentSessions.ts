@@ -150,3 +150,61 @@ function mapSessionRow(row: DbSessionRow): AgentSessionDim {
     lastSeenAt: row.last_seen_at,
   };
 }
+
+export interface LatestStreamTotals {
+  agentId: string;
+  sessionId: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  requestCount: number;
+}
+
+export function getLatestStreamTotalsForAllSessions(): LatestStreamTotals[] {
+  const db = getDatabase();
+
+  const rows = db.prepare(`
+    SELECT
+      s.agent_id, s.session_id,
+      ss.provider, ss.model,
+      ss.input_tokens, ss.output_tokens,
+      ss.cache_read_tokens, ss.cache_write_tokens,
+      ss.cost_usd, ss.request_count
+    FROM agent_session_stream_snapshots ss
+    JOIN agent_session_snapshots snap ON snap.id = ss.agent_session_snapshot_id
+    JOIN agent_sessions s ON s.id = snap.agent_session_id
+    WHERE snap.id IN (
+      SELECT MAX(snap2.id)
+      FROM agent_session_snapshots snap2
+      GROUP BY snap2.agent_session_id
+    )
+  `).all() as Array<{
+    agent_id: string;
+    session_id: string;
+    provider: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_write_tokens: number;
+    cost_usd: number;
+    request_count: number;
+  }>;
+
+  return rows.map(r => ({
+    agentId: r.agent_id,
+    sessionId: r.session_id,
+    provider: r.provider,
+    model: r.model,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+    cacheReadTokens: r.cache_read_tokens,
+    cacheWriteTokens: r.cache_write_tokens,
+    costUsd: r.cost_usd,
+    requestCount: r.request_count,
+  }));
+}

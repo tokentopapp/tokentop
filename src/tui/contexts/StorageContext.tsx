@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, us
 import { initDatabase, closeDatabase, isDatabaseInitialized, getAppRunId } from '@/storage/db.ts';
 import { insertProviderSnapshotBatch } from '@/storage/repos/providerSnapshots.ts';
 import { insertUsageEventBatch } from '@/storage/repos/usageEvents.ts';
-import { upsertAgentSession, insertAgentSessionSnapshot } from '@/storage/repos/agentSessions.ts';
+import { upsertAgentSession, insertAgentSessionSnapshot, getLatestStreamTotalsForAllSessions } from '@/storage/repos/agentSessions.ts';
 import type {
   ProviderSnapshotInsert,
   UsageEventInsert,
@@ -56,6 +56,22 @@ export function StorageProvider({ children }: StorageProviderProps) {
       try {
         await initDatabase();
         if (mounted) {
+          try {
+            const latestTotals = getLatestStreamTotalsForAllSessions();
+            for (const row of latestTotals) {
+              const streamKey = `${row.agentId}:${row.sessionId}:${row.provider}:${row.model}`;
+              previousTotalsRef.current.set(streamKey, {
+                inputTokens: row.inputTokens,
+                outputTokens: row.outputTokens,
+                cacheReadTokens: row.cacheReadTokens,
+                cacheWriteTokens: row.cacheWriteTokens,
+                costUsd: row.costUsd,
+                requestCount: row.requestCount,
+              });
+            }
+          } catch (err) {
+            console.error('Failed to seed previous totals from DB:', err);
+          }
           setIsReady(true);
           setAppRunId(getAppRunId());
         }

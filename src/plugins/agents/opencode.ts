@@ -33,6 +33,15 @@ const sessionCache: {
 
 const CACHE_TTL_MS = 2000;
 
+/**
+ * Per-session aggregate cache: avoids re-parsing messages for unchanged sessions.
+ * Keyed by sessionId, invalidated when session's time.updated changes.
+ */
+const sessionAggregateCache = new Map<string, {
+  updatedAt: number;
+  usageRows: SessionUsageData[];
+}>();
+
 interface OpenCodeAuthEntry {
   type: 'api' | 'oauth' | 'codex' | 'github' | 'wellknown';
   key?: string;
@@ -391,10 +400,12 @@ export const opencodeAgentPlugin: AgentPlugin = {
 
     sessionFiles.sort((a, b) => b.session.time.updated - a.session.time.updated);
 
-    const maxSessionsToProcess = Math.min(sessionFiles.length, 50);
-
-    for (let i = 0; i < maxSessionsToProcess; i++) {
-      const { session } = sessionFiles[i]!;
+    for (const { session } of sessionFiles) {
+      const cached = sessionAggregateCache.get(session.id);
+      if (cached && cached.updatedAt === session.time.updated) {
+        sessions.push(...cached.usageRows);
+        continue;
+      }
 
       const messagesDir = path.join(OPENCODE_MESSAGES_PATH, session.id);
 
@@ -419,6 +430,8 @@ export const opencodeAgentPlugin: AgentPlugin = {
       }
       
       messageData.sort((a, b) => b.mtime - a.mtime);
+
+      const sessionUsageRows: SessionUsageData[] = [];
 
       for (const { file: msgPath } of messageData) {
         const message = await readJsonFile<OpenCodeMessage>(msgPath);
@@ -453,8 +466,15 @@ export const opencodeAgentPlugin: AgentPlugin = {
           usage.projectPath = session.directory;
         }
 
-        sessions.push(usage);
+        sessionUsageRows.push(usage);
       }
+
+      sessionAggregateCache.set(session.id, {
+        updatedAt: session.time.updated,
+        usageRows: sessionUsageRows,
+      });
+
+      sessions.push(...sessionUsageRows);
     }
 
     if (!options.sessionId) {

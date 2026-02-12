@@ -32,7 +32,10 @@ export {
   getAgentSession,
   getRecentSessions,
   getSessionsByProject,
+  getLatestStreamTotalsForAllSessions,
 } from './repos/agentSessions.ts';
+
+export type { LatestStreamTotals } from './repos/agentSessions.ts';
 
 export type {
   UsageEventSource,
