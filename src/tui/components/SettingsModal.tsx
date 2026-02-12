@@ -67,14 +67,6 @@ const BASE_SETTINGS: SettingItem[] = [
     setValue: (c, v) => ({ ...c, display: { ...c.display, sidebarCollapsed: v as boolean } }),
   },
   {
-    key: 'compactMode',
-    label: 'Compact Mode',
-    category: 'display',
-    type: 'toggle',
-    getValue: (c) => c.display.compactMode,
-    setValue: (c, v) => ({ ...c, display: { ...c.display, compactMode: v as boolean } }),
-  },
-  {
     key: 'timeFormat',
     label: 'Time Format',
     category: 'display',

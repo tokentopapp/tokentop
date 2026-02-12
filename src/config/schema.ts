@@ -35,7 +35,6 @@ export interface AppConfig {
   display: {
     defaultTimeWindow: TimeWindow;
     sidebarCollapsed: boolean;
-    compactMode: boolean;
     timeFormat: '12h' | '24h';
     numberFormat: 'full' | 'compact';
     sparkline: SparklineConfig;
@@ -62,8 +61,7 @@ export const DEFAULT_CONFIG: AppConfig = {
    display: {
      defaultTimeWindow: '1h',
      sidebarCollapsed: false,
-     compactMode: false,
-     timeFormat: '24h',
+      timeFormat: '24h',
      numberFormat: 'compact',
      sparkline: {
        style: 'braille',
