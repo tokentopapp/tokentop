@@ -3,12 +3,10 @@ import { useColors } from '../contexts/ThemeContext.tsx';
 import { useTimeWindow, type TimeWindow } from '../contexts/TimeWindowContext.tsx';
 import { useConfig } from '../contexts/ConfigContext.tsx';
 import { Sparkline } from './Sparkline.tsx';
-import { usePulse } from '../hooks/usePulse.ts';
 import { useValueFlash, interpolateColor } from '../hooks/useValueFlash.ts';
 import { useAnimatedValue } from '../hooks/useAnimatedValue.ts';
 
 type MetricType = 'cost' | 'tokens' | 'requests' | 'rate' | 'default';
-type BudgetStatus = 'ok' | 'warning' | 'critical';
 
 interface KPICardProps {
   title: string;
@@ -16,7 +14,6 @@ interface KPICardProps {
   delta?: string;
   subValue?: string;
   metric?: MetricType;
-  budgetStatus?: BudgetStatus;
   flashIntensity?: number;
 }
 
@@ -57,19 +54,10 @@ function TimeWindowCard({ isCompact }: TimeWindowCardProps) {
   );
 }
 
-function KPICard({ title, value, delta, subValue, metric = 'default', budgetStatus, flashIntensity = 0 }: KPICardProps) {
+function KPICard({ title, value, delta, subValue, metric = 'default', flashIntensity = 0 }: KPICardProps) {
   const colors = useColors();
-  const pulseStep = usePulse({ enabled: budgetStatus === 'critical', intervalMs: 200 });
   
-  const getBaseMetricColor = (m: MetricType, status?: BudgetStatus): string => {
-    if (m === 'cost' && status) {
-      if (status === 'critical') {
-        const intensity = Math.sin((pulseStep / 12) * Math.PI * 2) * 0.5 + 0.5;
-        return intensity > 0.5 ? colors.error : colors.warning;
-      }
-      if (status === 'warning') return colors.warning;
-      return colors.success;
-    }
+  const getBaseMetricColor = (m: MetricType): string => {
     switch (m) {
       case 'cost': return colors.success;
       case 'tokens': return colors.primary;
@@ -79,14 +67,13 @@ function KPICard({ title, value, delta, subValue, metric = 'default', budgetStat
     }
   };
   
-  const baseColor = getBaseMetricColor(metric, budgetStatus);
+  const baseColor = getBaseMetricColor(metric);
   const flashHighlight = '#ffffff';
   const valueColor = flashIntensity > 0 
     ? interpolateColor(flashIntensity, baseColor, flashHighlight)
     : baseColor;
   
-  const deltaColor = budgetStatus === 'critical' ? colors.error : 
-                     budgetStatus === 'warning' ? colors.warning : colors.success;
+  const deltaColor = colors.success;
   
   return (
     <box 
@@ -140,7 +127,6 @@ export function KpiStrip({
   windowSec,
   activity,
   sparkData,
-  budget,
 }: KpiStripProps) {
   const colors = useColors();
   const { width: terminalWidth } = useTerminalDimensions();
@@ -173,16 +159,6 @@ export function KpiStrip({
     return `${(sec / 3600).toFixed(1)}h`;
   };
   
-  const getBudgetStatus = (): BudgetStatus => {
-    if (!budget || budget.budgetType === 'none') return 'ok';
-    if (!budget.limit || budget.limit <= 0) return 'ok';
-    const percent = (budget.budgetCost / budget.limit) * 100;
-    if (percent >= budget.criticalPercent) return 'critical';
-    if (percent >= budget.warningPercent) return 'warning';
-    return 'ok';
-  };
-  
-  const budgetStatus = getBudgetStatus();
   const hasEnoughHistory = windowSec >= 30;
   const burnRateCostPerHour = hasEnoughHistory ? deltaCost * (3600 / windowSec) : 0;
   const burnRateTokensPerMin = hasEnoughHistory ? deltaTokens * (60 / windowSec) : 0;
@@ -218,7 +194,6 @@ export function KpiStrip({
           value={formatCurrency(animatedCost)} 
           delta={hasEnoughHistory ? `+${formatCurrency(deltaCost)} (${windowLabel})` : 'gathering...'} 
           metric="cost"
-          budgetStatus={budgetStatus}
           flashIntensity={costFlashIntensity}
         />
         <KPICard 
