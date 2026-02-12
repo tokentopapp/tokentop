@@ -52,13 +52,13 @@ function formatDuration(startedAt: number, endedAt?: number): string {
   return `${diffDay}d${diffHour % 24}h`;
 }
 
-function formatCostPerHour(costUsd: number, startedAt: number): string {
-   const durationHours = (Date.now() - startedAt) / (1000 * 60 * 60);
-   if (durationHours < 0.01) return '--';
-   const rate = costUsd / durationHours;
-   if (rate < 0.01) return '$0';
-   if (rate < 10) return `$${rate.toFixed(2)}`;
-   return `$${rate.toFixed(1)}`;
+function formatCost(costUsd: number): string {
+   if (costUsd === 0) return '$0';
+   if (costUsd < 0.01) return '$0.00';
+   if (costUsd < 10) return `$${costUsd.toFixed(2)}`;
+   if (costUsd < 100) return `$${costUsd.toFixed(1)}`;
+   if (costUsd < 1000) return `$${Math.floor(costUsd)}`;
+   return `$${(costUsd / 1000).toFixed(1)}k`;
 }
 
 function truncateMiddle(str: string, maxLength: number): string {
@@ -91,8 +91,10 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
    const costUsd = session.totalCostUsd ?? 0;
    
    const animatedTokens = useAnimatedValue(totalTokens, { durationMs: 300, precision: 0 });
+   const animatedCost = useAnimatedValue(costUsd, { durationMs: 300, precision: 4 });
    
    const { intensity: tokenFlash } = useValueFlash(totalTokens, { durationMs: 400, threshold: 10 });
+   const { intensity: costFlash } = useValueFlash(costUsd, { durationMs: 400, threshold: 0.001 });
   
   const primaryStream = session.streams[0];
   const providerId = primaryStream?.providerId ?? 'unknown';
@@ -120,7 +122,11 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
   const textColor = fade(colors.text);
   const textSubtleColor = fade(colors.textSubtle);
   const textMutedColor = fade(colors.textMuted);
-  const warningColor = fade(colors.warning);
+  const baseCostColor = colors.warning;
+  const costColorBeforeFade = costFlash > 0
+    ? interpolateColor(costFlash, baseCostColor, '#ffffff')
+    : baseCostColor;
+  const costColor = fade(costColorBeforeFade);
   
   const formatTokensVal = (val: number): string => {
     if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
@@ -134,7 +140,7 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
   
   const lastActivity = formatRelativeTime(session.lastActivityAt);
   const duration = formatDuration(session.startedAt, session.endedAt);
-  const costPerHour = formatCostPerHour(costUsd, session.startedAt);
+  const costDisplay = formatCost(animatedCost);
   
    const modelDisplay = modelId.split('/').pop()?.slice(0, 15) ?? modelId;
    const streamCount = session.streams.length;
@@ -159,7 +165,7 @@ const SessionRow = memo(function SessionRow({ session, isSelected, isWide, getPr
          <text width={18} height={1} fg={providerColor} {...bgProp}>{modelWithCount.padEnd(17)}</text>
          <text width={5} height={1} fg={textMutedColor} {...bgProp}>{String(session.requestCount).padStart(4)}</text>
          <text width={8} height={1} fg={tokenColor} {...bgProp}>{formatTokensVal(animatedTokens).padStart(7)}</text>
-         <text width={8} height={1} fg={warningColor} {...bgProp}>{costPerHour.padStart(7)}</text>
+          <text width={8} height={1} fg={costColor} {...bgProp}>{costDisplay.padStart(7)}</text>
          <text width={20} height={1} fg={textMutedColor} {...bgProp}>{sessionNameDisplay.padEnd(19)}</text>
          <text flexGrow={1} height={1} fg={textSubtleColor} {...bgProp}>{projectDisplay}</text>
          <text width={6} height={1} fg={textMutedColor} {...bgProp}>{duration.padStart(5)}</text>
@@ -226,7 +232,7 @@ export const SessionsTable = forwardRef(function SessionsTable(
            <text width={18} height={1} fg={colors.textMuted}>MODEL             </text>
            <text width={5} height={1} fg={colors.textMuted}> REQ </text>
            <text width={8} height={1} fg={colors.textMuted}> TOKENS </text>
-           <text width={8} height={1} fg={colors.textMuted}>   $/HR </text>
+            <text width={8} height={1} fg={colors.textMuted}>   COST </text>
            <text width={20} height={1} fg={colors.textMuted}>NAME                </text>
            <text flexGrow={1} height={1} fg={colors.textMuted}>PROJECT</text>
            <text width={6} height={1} fg={colors.textMuted}>  DUR </text>
