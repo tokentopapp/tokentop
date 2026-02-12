@@ -3,7 +3,32 @@ import type {
   ProviderFetchContext,
   ProviderUsageData,
   Credentials,
+  CredentialResult,
+  OAuthCredentials,
+  PluginContext,
+  ProviderAuth,
 } from '../types/provider.ts';
+
+interface CodexCliCredentials {
+  access_token?: string;
+  refresh_token?: string;
+  expires_at?: number;
+  account_id?: string;
+  id_token?: string;
+}
+
+function buildOAuthCredentials(
+  accessToken: string,
+  refreshToken?: string,
+  expiresAt?: number,
+  accountId?: string,
+): OAuthCredentials {
+  const oauth: OAuthCredentials = { accessToken };
+  if (refreshToken !== undefined) oauth.refreshToken = refreshToken;
+  if (expiresAt !== undefined) oauth.expiresAt = expiresAt;
+  if (accountId !== undefined) oauth.accountId = accountId;
+  return oauth;
+}
 
 interface CodexUsageResponse {
   plan_type: string;
@@ -51,6 +76,10 @@ export const codexPlugin: ProviderPlugin = {
       read: false,
       vars: [],
     },
+    filesystem: {
+      read: true,
+      paths: ['~/.codex'],
+    },
   },
 
   capabilities: {
@@ -61,16 +90,53 @@ export const codexPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: [],
-    externalPaths: [
-      { path: '~/.codex/auth.json', type: 'codex-cli' },
-    ],
-    types: ['oauth'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      const entry = await ctx.authSources.opencode.getProviderEntry('openai');
+      if (entry) {
+        const accessToken = entry.accessToken || entry.access;
+        const refreshToken = entry.refreshToken || entry.refresh;
+        const expiresAt = entry.expiresAt || entry.expires;
+        if (accessToken) {
+          return {
+            ok: true,
+            credentials: {
+              oauth: buildOAuthCredentials(
+                accessToken,
+                refreshToken ?? undefined,
+                expiresAt ?? undefined,
+                entry.accountId,
+              ),
+              source: 'opencode',
+            },
+          };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!(credentials.oauth?.accessToken && credentials.oauth?.accountId);
-  },
+      // Source 2: Codex CLI auth file
+      const codexPath = `${ctx.authSources.platform.homedir}/.codex/auth.json`;
+      const data = await ctx.authSources.files.readJson<CodexCliCredentials>(codexPath);
+      if (data?.access_token) {
+        return {
+          ok: true,
+          credentials: {
+            oauth: buildOAuthCredentials(
+              data.access_token,
+              data.refresh_token,
+              data.expires_at,
+              data.account_id,
+            ),
+            source: 'external',
+          },
+        };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No Codex credentials found' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!(credentials.oauth?.accessToken && credentials.oauth?.accountId);
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

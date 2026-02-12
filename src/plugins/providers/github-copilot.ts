@@ -3,6 +3,9 @@ import type {
   ProviderFetchContext,
   ProviderUsageData,
   UsageLimit,
+  ProviderAuth,
+  PluginContext,
+  CredentialResult,
   Credentials,
 } from '../types/provider.ts';
 
@@ -45,6 +48,10 @@ export const githubCopilotPlugin: ProviderPlugin = {
       read: true,
       vars: ['GITHUB_TOKEN', 'GH_TOKEN'],
     },
+    filesystem: {
+      read: true,
+      paths: ['~/.config/github-copilot'],
+    },
   },
 
   capabilities: {
@@ -55,16 +62,44 @@ export const githubCopilotPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: ['GITHUB_TOKEN', 'GH_TOKEN'],
-    externalPaths: [
-      { path: '~/.config/github-copilot/hosts.json', type: 'copilot' },
-    ],
-    types: ['api', 'oauth'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      const entry = await ctx.authSources.opencode.getProviderEntry('github-copilot');
+      if (entry) {
+        const token = entry.token || entry.key || entry.access;
+        if (token) {
+          return { ok: true, credentials: { apiKey: token, source: 'opencode' } };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!(credentials.apiKey || credentials.oauth?.accessToken);
-  },
+      // 2. Try env vars
+      const githubToken = ctx.authSources.env.get('GITHUB_TOKEN');
+      if (githubToken) {
+        return { ok: true, credentials: { apiKey: githubToken, source: 'env' } };
+      }
+
+      const ghToken = ctx.authSources.env.get('GH_TOKEN');
+      if (ghToken) {
+        return { ok: true, credentials: { apiKey: ghToken, source: 'env' } };
+      }
+
+      // 3. Try external file: ~/.config/github-copilot/hosts.json
+      const hostsData = await ctx.authSources.files.readJson<{
+        'github.com'?: { oauth_token?: string; user?: string };
+      }>('~/.config/github-copilot/hosts.json');
+      if (hostsData) {
+        const githubEntry = hostsData['github.com'];
+        if (githubEntry?.oauth_token) {
+          return { ok: true, credentials: { apiKey: githubEntry.oauth_token, source: 'external' } };
+        }
+      }
+
+      return { ok: false, reason: 'missing', message: 'No GitHub token found. Set GITHUB_TOKEN or install GitHub Copilot CLI.' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!(credentials.apiKey || credentials.oauth?.accessToken);
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

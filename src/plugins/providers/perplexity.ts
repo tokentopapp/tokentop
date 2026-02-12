@@ -2,6 +2,9 @@ import type {
   ProviderPlugin,
   ProviderFetchContext,
   ProviderUsageData,
+  ProviderAuth,
+  PluginContext,
+  CredentialResult,
   Credentials,
 } from '../types/provider.ts';
 
@@ -50,13 +53,31 @@ export const perplexityPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: ['PERPLEXITY_API_KEY'],
-    types: ['api'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      // 1. Try OpenCode auth first (wellknown type, has token or key)
+      const entry = await ctx.authSources.opencode.getProviderEntry('perplexity');
+      if (entry) {
+        if (entry.type === 'api' && entry.key) {
+          return { ok: true, credentials: { apiKey: entry.key, source: 'opencode' } };
+        }
+        if (entry.type === 'wellknown' && (entry.token || entry.key)) {
+          return { ok: true, credentials: { apiKey: (entry.token || entry.key)!, source: 'opencode' } };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!credentials.apiKey;
-  },
+      // 2. Try env vars
+      const apiKey = ctx.authSources.env.get('PERPLEXITY_API_KEY');
+      if (apiKey) {
+        return { ok: true, credentials: { apiKey, source: 'env' } };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No Perplexity API key found. Set PERPLEXITY_API_KEY or configure in OpenCode.' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!credentials.apiKey;
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

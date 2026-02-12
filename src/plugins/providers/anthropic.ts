@@ -1,11 +1,108 @@
+import { execFileSync } from 'child_process';
 import type {
   ProviderPlugin,
   ProviderFetchContext,
   ProviderUsageData,
   Credentials,
+  CredentialResult,
+  OAuthCredentials,
+  PluginContext,
+  ProviderAuth,
 } from '../types/provider.ts';
 
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+interface ClaudeCodeCredentialsFile {
+  claudeAiOauth?: {
+    accessToken?: string;
+    refreshToken?: string;
+    subscriptionType?: string;
+    rateLimitTier?: string;
+    expiresAt?: number;
+    scopes?: string[];
+  };
+}
+
+function buildOAuthCredentials(
+  accessToken: string,
+  refreshToken?: string,
+  expiresAt?: number,
+  accountId?: string,
+  subscriptionType?: string
+): OAuthCredentials {
+  const oauth: OAuthCredentials = { accessToken };
+  if (refreshToken !== undefined) oauth.refreshToken = refreshToken;
+  if (expiresAt !== undefined) oauth.expiresAt = expiresAt;
+  if (accountId !== undefined) oauth.accountId = accountId;
+  if (subscriptionType !== undefined) {
+    (oauth as OAuthCredentials & { subscriptionType?: string }).subscriptionType = subscriptionType;
+  }
+  return oauth;
+}
+
+async function discoverClaudeCode(ctx: PluginContext): Promise<CredentialResult> {
+  const now = Date.now();
+
+  // Try macOS Keychain first (only on darwin)
+  if (ctx.authSources.platform.os === 'darwin') {
+    try {
+      const keychainData = execFileSync(
+        '/usr/bin/security',
+        ['find-generic-password', '-s', 'Claude Code-credentials', '-w'],
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 }
+      ).trim();
+
+      if (keychainData) {
+        const parsed = JSON.parse(keychainData) as ClaudeCodeCredentialsFile;
+        const oauth = parsed.claudeAiOauth;
+        if (oauth?.accessToken) {
+          const isExpired = oauth.expiresAt && oauth.expiresAt <= now;
+          if (!isExpired) {
+            return {
+              ok: true,
+              credentials: {
+                oauth: buildOAuthCredentials(
+                  oauth.accessToken,
+                  oauth.refreshToken,
+                  oauth.expiresAt,
+                  undefined,
+                  oauth.subscriptionType
+                ),
+                source: 'external',
+              },
+            };
+          }
+        }
+      }
+    } catch {
+      // Keychain access failed, fall through to file
+    }
+  }
+
+  // Fall back to credentials file
+  const credPath = `${ctx.authSources.platform.homedir}/.claude/.credentials.json`;
+  const fileData = await ctx.authSources.files.readJson<ClaudeCodeCredentialsFile>(credPath);
+  const fileOauth = fileData?.claudeAiOauth;
+  if (!fileOauth?.accessToken) return { ok: false, reason: 'missing', message: 'No Claude Code credentials found' };
+
+  if (fileOauth.expiresAt && fileOauth.expiresAt <= now) {
+    return { ok: false, reason: 'expired', message: 'Claude Code token expired' };
+  }
+
+  return {
+    ok: true,
+    credentials: {
+      oauth: buildOAuthCredentials(
+        fileOauth.accessToken,
+        fileOauth.refreshToken,
+        fileOauth.expiresAt,
+        undefined,
+        fileOauth.subscriptionType
+      ),
+      source: 'external',
+    },
+  };
+}
 
 interface AnthropicUsageResponse {
   five_hour?: {
@@ -53,16 +150,33 @@ export const anthropicPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: ['ANTHROPIC_API_KEY'],
-    externalPaths: [
-      { path: '~/.claude/.credentials.json', type: 'claude-code' },
-    ],
-    types: ['oauth', 'api'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      const entry = await ctx.authSources.opencode.getProviderEntry('anthropic');
+      if (entry?.type === 'oauth' && entry.access) {
+        return {
+          ok: true,
+          credentials: {
+            oauth: buildOAuthCredentials(entry.access, entry.refresh, entry.expires, entry.accountId),
+            source: 'opencode',
+          },
+        };
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!(credentials.oauth?.accessToken || credentials.apiKey);
-  },
+      const claudeCodeResult = await discoverClaudeCode(ctx);
+      if (claudeCodeResult.ok) return claudeCodeResult;
+
+      const apiKey = ctx.authSources.env.get('ANTHROPIC_API_KEY');
+      if (apiKey) {
+        return { ok: true, credentials: { apiKey, source: 'env' } };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No Anthropic credentials found' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!(credentials.oauth?.accessToken || credentials.apiKey);
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

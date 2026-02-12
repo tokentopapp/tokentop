@@ -4,8 +4,11 @@ import type {
   ProviderUsageData,
   UsageLimit,
   Credentials,
+  CredentialResult,
   OAuthCredentials,
   RefreshedCredentials,
+  PluginContext,
+  ProviderAuth,
 } from '../types/provider.ts';
 
 const ANTIGRAVITY_ENDPOINTS = [
@@ -27,6 +30,24 @@ const ANTIGRAVITY_CLIENT_ID = process.env.ANTIGRAVITY_CLIENT_ID
 const ANTIGRAVITY_CLIENT_SECRET = process.env.ANTIGRAVITY_CLIENT_SECRET
   ?? Buffer.from('R09DU1BYLUs1OEZXUjQ4NkxkTEoxbUxCOHNYQzR6NnFEQWY=', 'base64').toString();
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+interface AntigravityAccount {
+  email?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  expiresAt?: number;
+  addedAt?: number;
+  lastUsed?: number;
+  rateLimitResetTimes?: Record<string, unknown>;
+  managedProjectId?: string;
+}
+
+interface AntigravityAccountsFile {
+  version?: number;
+  accounts?: AntigravityAccount[];
+  activeIndex?: number;
+  activeIndexByFamily?: Record<string, number>;
+}
 
 interface TokenResponse {
   access_token: string;
@@ -66,6 +87,10 @@ export const antigravityPlugin: ProviderPlugin = {
       read: false,
       vars: [],
     },
+    filesystem: {
+      read: true,
+      paths: ['~/.config/opencode'],
+    },
   },
 
   capabilities: {
@@ -76,13 +101,42 @@ export const antigravityPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: [],
-    types: ['oauth'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      // Source 1: Antigravity accounts file (shared with gemini provider)
+      const antigravityPath = `${ctx.authSources.platform.homedir}/.config/opencode/antigravity-accounts.json`;
+      const agData = await ctx.authSources.files.readJson<AntigravityAccountsFile>(antigravityPath);
+      if (agData?.accounts && agData.accounts.length > 0) {
+        const activeIndex = agData.activeIndex ?? 0;
+        const account = agData.accounts[activeIndex] ?? agData.accounts[0];
+        if (account && (account.refreshToken || account.accessToken)) {
+          const oauth: OAuthCredentials = {
+            accessToken: account.accessToken ?? '',
+            ...(account.refreshToken !== undefined && { refreshToken: account.refreshToken }),
+            ...(account.expiresAt !== undefined && { expiresAt: account.expiresAt }),
+            ...(account.managedProjectId !== undefined && { managedProjectId: account.managedProjectId }),
+          };
+          return { ok: true, credentials: { oauth, source: 'opencode' } };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!(credentials.oauth?.accessToken || credentials.oauth?.refreshToken);
-  },
+      // Source 2: OpenCode OAuth under 'google' key
+      const entry = await ctx.authSources.opencode.getProviderEntry('google');
+      if (entry?.type === 'oauth' && entry.access) {
+        const oauth: OAuthCredentials = {
+          accessToken: entry.access,
+          ...(entry.refresh !== undefined && { refreshToken: entry.refresh }),
+          ...(entry.expires !== undefined && { expiresAt: entry.expires }),
+        };
+        return { ok: true, credentials: { oauth, source: 'opencode' } };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No Antigravity credentials found' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!(credentials.oauth?.accessToken || credentials.oauth?.refreshToken);
+    },
+  } satisfies ProviderAuth,
 
   async refreshToken(auth: OAuthCredentials): Promise<RefreshedCredentials> {
     if (!auth.refreshToken) {

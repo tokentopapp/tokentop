@@ -2,8 +2,11 @@ import type {
   ProviderPlugin,
   ProviderFetchContext,
   ProviderUsageData,
-  Credentials,
   UsageLimit,
+  ProviderAuth,
+  PluginContext,
+  CredentialResult,
+  Credentials,
 } from '../types/provider.ts';
 
 const ZAI_USAGE_URL = 'https://api.z.ai/api/monitor/usage/quota/limit';
@@ -44,6 +47,10 @@ export const zaiCodingPlanPlugin: ProviderPlugin = {
       read: true,
       paths: ['~/.local/share/opencode'],
     },
+    env: {
+      read: true,
+      vars: ['ZAI_API_KEY'],
+    },
   },
 
   capabilities: {
@@ -54,20 +61,34 @@ export const zaiCodingPlanPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: ['ZAI_API_KEY'],
-    externalPaths: [
-      {
-        path: '~/.local/share/opencode/auth.json',
-        type: 'opencode-api',
-        key: 'zai-coding-plan',
-      },
-    ],
-    types: ['api', 'oauth'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      // 1. Try OpenCode auth (api, wellknown, or oauth)
+      const entry = await ctx.authSources.opencode.getProviderEntry('zai-coding-plan');
+      if (entry) {
+        if (entry.type === 'api' && entry.key) {
+          return { ok: true, credentials: { apiKey: entry.key, source: 'opencode' } };
+        }
+        if (entry.type === 'wellknown' && (entry.token || entry.key)) {
+          return { ok: true, credentials: { apiKey: (entry.token || entry.key)!, source: 'opencode' } };
+        }
+        if (entry.type === 'oauth' && entry.access) {
+          return { ok: true, credentials: { apiKey: entry.access, source: 'opencode' } };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!(credentials.apiKey || credentials.oauth?.accessToken);
-  },
+      // 2. Try env vars
+      const apiKey = ctx.authSources.env.get('ZAI_API_KEY');
+      if (apiKey) {
+        return { ok: true, credentials: { apiKey, source: 'env' } };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No Z.ai API key found. Configure Z.ai in OpenCode.' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!(credentials.apiKey || credentials.oauth?.accessToken);
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

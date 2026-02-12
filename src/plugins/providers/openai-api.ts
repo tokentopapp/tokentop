@@ -2,6 +2,9 @@ import type {
   ProviderPlugin,
   ProviderFetchContext,
   ProviderUsageData,
+  ProviderAuth,
+  PluginContext,
+  CredentialResult,
   Credentials,
 } from '../types/provider.ts';
 
@@ -77,13 +80,35 @@ export const openaiApiPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: ['OPENAI_API_KEY', 'OPENAI_ADMIN_KEY'],
-    types: ['api'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      const entry = await ctx.authSources.opencode.getProviderEntry('openai');
+      if (entry) {
+        if (entry.type === 'api' && entry.key) {
+          return { ok: true, credentials: { apiKey: entry.key, source: 'opencode' } };
+        }
+        if (entry.type === 'wellknown' && (entry.token || entry.key)) {
+          return { ok: true, credentials: { apiKey: (entry.token || entry.key)!, source: 'opencode' } };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!credentials.apiKey;
-  },
+      // 2. Try env vars (OPENAI_API_KEY, then OPENAI_ADMIN_KEY)
+      const apiKey = ctx.authSources.env.get('OPENAI_API_KEY');
+      if (apiKey) {
+        return { ok: true, credentials: { apiKey, source: 'env' } };
+      }
+
+      const adminKey = ctx.authSources.env.get('OPENAI_ADMIN_KEY');
+      if (adminKey) {
+        return { ok: true, credentials: { apiKey: adminKey, source: 'env' } };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No OpenAI API key found. Set OPENAI_API_KEY or configure in OpenCode.' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!credentials.apiKey;
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

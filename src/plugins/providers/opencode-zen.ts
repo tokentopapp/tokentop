@@ -2,6 +2,9 @@ import type {
   ProviderPlugin,
   ProviderFetchContext,
   ProviderUsageData,
+  ProviderAuth,
+  PluginContext,
+  CredentialResult,
   Credentials,
 } from '../types/provider.ts';
 
@@ -26,6 +29,10 @@ export const opencodeZenPlugin: ProviderPlugin = {
       read: true,
       paths: ['~/.local/share/opencode'],
     },
+    env: {
+      read: true,
+      vars: ['OPENCODE_API_KEY'],
+    },
   },
 
   capabilities: {
@@ -36,20 +43,31 @@ export const opencodeZenPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: ['OPENCODE_API_KEY'],
-    externalPaths: [
-      {
-        path: '~/.local/share/opencode/auth.json',
-        type: 'json-key',
-        key: 'opencode.key',
-      },
-    ],
-    types: ['api'],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      // 1. Try OpenCode auth (getProviderEntry reads auth.json and config)
+      const entry = await ctx.authSources.opencode.getProviderEntry('opencode');
+      if (entry) {
+        if (entry.type === 'api' && entry.key) {
+          return { ok: true, credentials: { apiKey: entry.key, source: 'opencode' } };
+        }
+        if (entry.type === 'wellknown' && (entry.token || entry.key)) {
+          return { ok: true, credentials: { apiKey: (entry.token || entry.key)!, source: 'opencode' } };
+        }
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!credentials.apiKey;
-  },
+      // 2. Try env vars
+      const apiKey = ctx.authSources.env.get('OPENCODE_API_KEY');
+      if (apiKey) {
+        return { ok: true, credentials: { apiKey, source: 'env' } };
+      }
+
+      return { ok: false, reason: 'missing', message: 'No OpenCode API key found. Run /connect in OpenCode to set up Zen.' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!credentials.apiKey;
+    },
+  } satisfies ProviderAuth,
 
   async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
     const { credentials, http, log } = ctx;

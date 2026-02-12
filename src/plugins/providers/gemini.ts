@@ -4,8 +4,11 @@ import type {
   ProviderUsageData,
   UsageLimit,
   Credentials,
+  CredentialResult,
   OAuthCredentials,
   RefreshedCredentials,
+  PluginContext,
+  ProviderAuth,
 } from '../types/provider.ts';
 
 const GOOGLE_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
@@ -23,6 +26,14 @@ const GEMINI_CLI_CLIENT_ID = process.env.GEMINI_CLI_CLIENT_ID
 const GEMINI_CLI_CLIENT_SECRET = process.env.GEMINI_CLI_CLIENT_SECRET
   ?? Buffer.from('R09DU1BYLTR1SGdNUG0tMW83U2stZ2VWNkN1NWNsWEZzeGw=', 'base64').toString();
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+interface GeminiCliCredentials {
+  access_token?: string;
+  refresh_token?: string;
+  expiry_date?: number;
+  token_type?: string;
+  scope?: string;
+}
 
 interface TokenResponse {
   access_token: string;
@@ -69,6 +80,10 @@ export const geminiPlugin: ProviderPlugin = {
       read: true,
       vars: ['GOOGLE_CLOUD_PROJECT', 'GCP_PROJECT', 'GCLOUD_PROJECT'],
     },
+    filesystem: {
+      read: true,
+      paths: ['~/.gemini'],
+    },
   },
 
   capabilities: {
@@ -79,16 +94,25 @@ export const geminiPlugin: ProviderPlugin = {
   },
 
   auth: {
-    envVars: [],
-    types: ['oauth'],
-    externalPaths: [
-      { path: '~/.gemini/oauth_creds.json', type: 'gemini' },
-    ],
-  },
+    async discover(ctx: PluginContext): Promise<CredentialResult> {
+      const geminiPath = `${ctx.authSources.platform.homedir}/.gemini/oauth_creds.json`;
+      const geminiData = await ctx.authSources.files.readJson<GeminiCliCredentials>(geminiPath);
+      if (geminiData?.access_token || geminiData?.refresh_token) {
+        const oauth: OAuthCredentials = {
+          accessToken: geminiData.access_token ?? '',
+          ...(geminiData.refresh_token !== undefined && { refreshToken: geminiData.refresh_token }),
+          ...(geminiData.expiry_date !== undefined && { expiresAt: geminiData.expiry_date }),
+        };
+        return { ok: true, credentials: { oauth, source: 'external' } };
+      }
 
-  isConfigured(credentials: Credentials): boolean {
-    return !!(credentials.oauth?.accessToken || credentials.oauth?.refreshToken);
-  },
+      return { ok: false, reason: 'missing', message: 'No Gemini CLI credentials found. Run `gemini` to authenticate.' };
+    },
+
+    isConfigured(credentials: Credentials): boolean {
+      return !!(credentials.oauth?.accessToken || credentials.oauth?.refreshToken);
+    },
+  } satisfies ProviderAuth,
 
   async refreshToken(auth: OAuthCredentials): Promise<RefreshedCredentials> {
     if (!auth.refreshToken) {

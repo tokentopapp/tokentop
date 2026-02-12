@@ -1,16 +1,15 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { ProviderPlugin, ProviderUsageData } from '@/plugins/types/provider.ts';
+import type { ProviderPlugin, ProviderUsageData, Credentials } from '@/plugins/types/provider.ts';
 import type { ThemePlugin } from '@/plugins/types/theme.ts';
 import type { NotificationPlugin } from '@/plugins/types/notification.ts';
 import { pluginRegistry } from '@/plugins/registry.ts';
-import { discoverAllCredentials } from '@/credentials/index.ts';
 import { createSandboxedHttpClient, createPluginLogger } from '@/plugins/sandbox.ts';
+import { createPluginContext } from '@/plugins/plugin-context-factory.ts';
 import { useLogs } from './LogContext.tsx';
 import { useStorage } from './StorageContext.tsx';
 import type { ProviderSnapshotInsert } from '@/storage/types.ts';
 import { useDemoMode } from './DemoModeContext.tsx';
 import { useConfig } from './ConfigContext.tsx';
-import type { Credentials } from '@/plugins/types/provider.ts';
 
 export interface UsageSnapshot {
   timestamp: number;
@@ -114,18 +113,20 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
 
       debug('Discovering credentials...', undefined, 'credentials');
 
-      const providerConfigs = providerPlugins.map((p) => {
-        const config: { id: string; envVars: string[]; externalPaths?: Array<{ path: string; type: string; key?: string }> } = {
-          id: p.id,
-          envVars: p.auth.envVars,
-        };
-        if (p.auth.externalPaths) {
-          config.externalPaths = p.auth.externalPaths;
-        }
-        return config;
-      });
-
-      const credentials = demoMode ? new Map<string, Credentials>() : await discoverAllCredentials(providerConfigs);
+      const credentials = new Map<string, Credentials>();
+      if (!demoMode) {
+        await Promise.all(providerPlugins.map(async (p) => {
+          try {
+            const ctx = createPluginContext(p.id, p.permissions);
+            const result = await p.auth.discover(ctx);
+            if (result.ok && result.credentials) {
+              credentials.set(p.id, result.credentials);
+            }
+          } catch (err) {
+            logError(`Credential discovery failed for ${p.id}`, { error: String(err) }, 'credentials');
+          }
+        }));
+      }
 
       const providerStates = new Map<string, ProviderState>();
       const configuredIds: string[] = [];
@@ -133,7 +134,7 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
 
       for (const plugin of providerPlugins) {
         const creds = credentials.get(plugin.id);
-        const configured = demoMode ? true : (creds ? plugin.isConfigured(creds) : false);
+        const configured = demoMode ? true : (creds ? plugin.auth.isConfigured(creds) : false);
         providerStates.set(plugin.id, {
           plugin,
           configured,
@@ -245,15 +246,9 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
         return;
       }
 
-      const config: { id: string; envVars: string[]; externalPaths?: Array<{ path: string; type: string; key?: string }> } = {
-        id: providerId,
-        envVars: state.plugin.auth.envVars,
-      };
-      if (state.plugin.auth.externalPaths) {
-        config.externalPaths = state.plugin.auth.externalPaths;
-      }
-      const credentials = await discoverAllCredentials([config]);
-      const creds = credentials.get(providerId);
+      const ctx = createPluginContext(providerId, state.plugin.permissions);
+      const result = await state.plugin.auth.discover(ctx);
+      const creds = result.ok ? result.credentials : undefined;
 
       if (!creds) {
         throw new Error('Credentials not found');

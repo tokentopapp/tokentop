@@ -2,6 +2,9 @@ import type {
   ProviderPlugin,
   ProviderFetchContext,
   ProviderUsageData,
+  ProviderAuth,
+  PluginContext,
+  CredentialResult,
   Credentials,
 } from '../types/provider.ts';
 
@@ -58,20 +61,53 @@ function createMinimaxPlugin(id: string, name: string): ProviderPlugin {
     },
 
     auth: {
-      envVars: ['MINIMAX_API_KEY'],
-      externalPaths: [
-        {
-          path: '~/.local/share/opencode/auth.json',
-          type: 'opencode-api',
-          key: id,
-        },
-      ],
-      types: ['api'],
-    },
+      async discover(ctx: PluginContext): Promise<CredentialResult> {
+        // 1. Try OpenCode auth (api type with key + groupId)
+        const entry = await ctx.authSources.opencode.getProviderEntry(id);
+        if (entry) {
+          if (entry.type === 'api' && entry.key) {
+            return {
+              ok: true,
+              credentials: {
+                apiKey: entry.key,
+                ...(entry.groupId && { groupId: entry.groupId }),
+                source: 'opencode',
+              },
+            };
+          }
+          if (entry.type === 'wellknown' && (entry.token || entry.key)) {
+            return {
+              ok: true,
+              credentials: {
+                apiKey: (entry.token || entry.key)!,
+                ...(entry.groupId && { groupId: entry.groupId }),
+                source: 'opencode',
+              },
+            };
+          }
+        }
 
-    isConfigured(credentials: Credentials): boolean {
-      return !!credentials.apiKey;
-    },
+        // 2. Try env vars
+        const apiKey = ctx.authSources.env.get('MINIMAX_API_KEY');
+        if (apiKey) {
+          const groupId = ctx.authSources.env.get('MINIMAX_GROUP_ID');
+          return {
+            ok: true,
+            credentials: {
+              apiKey,
+              ...(groupId && { groupId }),
+              source: 'env',
+            },
+          };
+        }
+
+        return { ok: false, reason: 'missing', message: 'No MiniMax API key found. Configure MiniMax in OpenCode.' };
+      },
+
+      isConfigured(credentials: Credentials): boolean {
+        return !!credentials.apiKey;
+      },
+    } satisfies ProviderAuth,
 
     async fetchUsage(ctx: ProviderFetchContext): Promise<ProviderUsageData> {
       const { credentials, http, log, config } = ctx;
