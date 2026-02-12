@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 import type { ThemePlugin } from '@/plugins/types/theme.ts';
 import type { DemoPreset } from '@/demo/simulator.ts';
 import { TestModeContext } from './hooks/useSafeRenderer.ts';
+import { App } from './App.tsx';
 
-export { App } from './App.tsx';
+export { App };
 
 export interface CreateAppOptions {
   initialTheme?: ThemePlugin;
@@ -24,7 +25,6 @@ export const DEFAULT_APP_OPTIONS = {
 } as const;
 
 export function createAppElement(options: CreateAppOptions = {}): ReactNode {
-  const { App } = require('./App.tsx');
   const isTestMode = options.testMode ?? DEFAULT_APP_OPTIONS.testMode;
   
   const appElement = (
