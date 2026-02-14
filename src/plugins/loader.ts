@@ -188,16 +188,15 @@ export async function loadLocalPlugin(filePath: string): Promise<PluginLoadResul
   }
 }
 
-export async function loadNpmPlugin(packageName: string): Promise<PluginLoadResult<AnyPlugin>> {
-  // Official plugins: @tokentop/provider-*, @tokentop/agent-*, etc.
-  // Community plugins: tokentop-provider-*, tokentop-agent-*, etc.
-  // Scoped community: @scope/tokentop-provider-*, @scope/tokentop-agent-*, etc.
+export async function loadNpmPlugin(packageName: string, resolvedPath?: string): Promise<PluginLoadResult<AnyPlugin>> {
   const pluginTypes = ['provider', 'agent', 'theme', 'notification'];
 
-  const isOfficial = pluginTypes.some((t) => packageName.startsWith(`@tokentop/${t}-`));
-  const isCommunity = pluginTypes.some((t) => packageName.startsWith(`tokentop-${t}-`));
+  const cleanName = packageName.replace(/@[^@]*$/, '');
+
+  const isOfficial = pluginTypes.some((t) => cleanName.startsWith(`@tokentop/${t}-`));
+  const isCommunity = pluginTypes.some((t) => cleanName.startsWith(`tokentop-${t}-`));
   const isScopedCommunity = pluginTypes.some((t) => {
-    const match = packageName.match(/^@[^/]+\/tokentop-(\w+)-/);
+    const match = cleanName.match(/^@[^/]+\/tokentop-(\w+)-/);
     return match?.[1] === t;
   });
 
@@ -213,7 +212,8 @@ export async function loadNpmPlugin(packageName: string): Promise<PluginLoadResu
   }
 
   try {
-    const module = await import(packageName);
+    const importTarget = resolvedPath ?? cleanName;
+    const module = await import(importTarget);
     const plugin = module.default ?? module.plugin ?? module;
 
     const validation = await validatePlugin(plugin);

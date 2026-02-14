@@ -8,6 +8,7 @@ import type {
   NotificationPlugin,
 } from './types/index.ts';
 import { loadLocalPlugin, loadNpmPlugin, discoverLocalPlugins, resolvePluginPath } from './loader.ts';
+import { installAllNpmPlugins, resolveNpmPluginPath } from './npm-installer.ts';
 import type { PluginsConfig } from '@/config/schema.ts';
 
 type PluginStore = {
@@ -135,8 +136,20 @@ class PluginRegistryImpl {
   }
 
   async loadNpmPlugins(packages: string[]): Promise<void> {
+    const installResults = await installAllNpmPlugins(packages);
+    for (const ir of installResults) {
+      if (ir.error) {
+        console.warn(`Failed to install npm plugin ${ir.name}: ${ir.error}`);
+        continue;
+      }
+      if (ir.installed) {
+        console.info(`Installed npm plugin: ${ir.name}@${ir.version}`);
+      }
+    }
+
     for (const packageName of packages) {
-      const result = await loadNpmPlugin(packageName);
+      const resolvedPath = resolveNpmPluginPath(packageName);
+      const result = await loadNpmPlugin(packageName, resolvedPath);
       if (result.success && result.plugin) {
         this.register(result.plugin);
         console.info(`Loaded npm plugin: ${result.plugin.name} (${packageName})`);

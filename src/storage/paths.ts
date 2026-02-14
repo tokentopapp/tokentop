@@ -16,4 +16,8 @@ export const PATHS = {
     cache: path.join(HOME, '.local/share/tokentop/cache'),
     logs: path.join(HOME, '.local/share/tokentop/logs'),
   },
+  cache: {
+    dir: path.join(HOME, '.cache/tokentop'),
+    nodeModules: path.join(HOME, '.cache/tokentop/node_modules'),
+  },
 } as const;
