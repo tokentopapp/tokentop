@@ -1,14 +1,6 @@
-export type AgentName = 'OpenCode' | 'Claude Code' | 'Gemini CLI' | 'Cursor' | 'Windsurf';
+export type AgentName = string;
 
-export type AgentId = 'opencode' | 'claude-code' | 'gemini-cli' | 'cursor' | 'windsurf';
-
-export const AGENT_ID_TO_NAME: Record<AgentId, AgentName> = {
-  'opencode': 'OpenCode',
-  'claude-code': 'Claude Code',
-  'gemini-cli': 'Gemini CLI',
-  'cursor': 'Cursor',
-  'windsurf': 'Windsurf',
-};
+export type AgentId = string;
 
 export interface TokenCounts {
   input: number;

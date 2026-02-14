@@ -7,8 +7,6 @@ export type {
   AgentInfo,
 } from './types.ts';
 
-export { AGENT_ID_TO_NAME } from './types.ts';
-
 export { aggregateSessionUsage } from './aggregator.ts';
 
 export { priceStream, priceSession, priceSessions } from './costing.ts';

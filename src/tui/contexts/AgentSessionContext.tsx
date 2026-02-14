@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { AgentPlugin, SessionParseOptions } from '@/plugins/types/agent.ts';
-import type { AgentSessionAggregate, AgentInfo, AgentId, AgentName } from '@/agents/types.ts';
-import { AGENT_ID_TO_NAME } from '@/agents/types.ts';
+import type { AgentSessionAggregate, AgentInfo, AgentId } from '@/agents/types.ts';
 import { aggregateSessionUsage } from '@/agents/aggregator.ts';
 import { priceSessions } from '@/agents/costing.ts';
 import { pluginRegistry } from '@/plugins/registry.ts';
@@ -58,8 +57,8 @@ export function AgentSessionProvider({
     const discovered: AgentInfo[] = [];
 
     for (const plugin of agentPlugins) {
-      const agentId = plugin.id as AgentId;
-      const agentName = AGENT_ID_TO_NAME[agentId] ?? plugin.name as AgentName;
+      const agentId = plugin.id;
+      const agentName = plugin.name;
 
       try {
         const installed = await plugin.isInstalled();
@@ -89,8 +88,8 @@ export function AgentSessionProvider({
     plugin: AgentPlugin,
     options: SessionParseOptions
   ): Promise<AgentSessionAggregate[]> => {
-    const agentId = plugin.id as AgentId;
-    const agentName = AGENT_ID_TO_NAME[agentId] ?? plugin.name as AgentName;
+    const agentId = plugin.id;
+    const agentName = plugin.name;
 
     const http = createSandboxedHttpClient(plugin.id, plugin.permissions);
     const log = createPluginLogger(plugin.id);
