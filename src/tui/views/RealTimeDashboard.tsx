@@ -10,9 +10,7 @@ import { useDashboardRuntime } from '../contexts/DashboardRuntimeContext.tsx';
 import { useDrawer } from '../contexts/DrawerContext.tsx';
 import { useDashboardKeyboard } from '../hooks/useDashboardKeyboard.ts';
 import { getProviderColor } from '../utils/providerColor.ts';
-
-
-
+import { notificationBus } from '@/plugins/notification-bus.ts';
 
 import { KpiStrip } from '../components/KpiStrip.tsx';
 import { SessionsTable } from '../components/SessionsTable.tsx';
@@ -270,6 +268,19 @@ export function RealTimeDashboard() {
 
     return { daily: dailyCost, weekly: weeklyCost, monthly: monthlyCost };
   }, [agentSessions]);
+
+  useEffect(() => {
+    const checks: Array<{ cost: number; limit: number | null; type: 'daily' | 'weekly' | 'monthly' }> = [
+      { cost: budgetPeriodCost.daily, limit: config.budgets.daily, type: 'daily' },
+      { cost: budgetPeriodCost.weekly, limit: config.budgets.weekly, type: 'weekly' },
+      { cost: budgetPeriodCost.monthly, limit: config.budgets.monthly, type: 'monthly' },
+    ];
+    for (const { cost, limit, type } of checks) {
+      if (limit !== null && limit > 0) {
+        notificationBus.checkBudget(cost, limit, type, config);
+      }
+    }
+  }, [budgetPeriodCost, config]);
 
   const getBudgetCost = () => {
     switch (budgetType) {

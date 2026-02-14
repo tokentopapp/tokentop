@@ -6,6 +6,7 @@ import { pluginRegistry } from '@/plugins/registry.ts';
 import { createSandboxedHttpClient, createPluginLogger } from '@/plugins/sandbox.ts';
 import { createPluginContext } from '@/plugins/plugin-context-factory.ts';
 import { safeInvoke, safeInvokeSync } from '@/plugins/plugin-host.ts';
+import { notificationBus } from '@/plugins/notification-bus.ts';
 import { initPricingFromPlugins } from '@/pricing/index.ts';
 import { useLogs } from './LogContext.tsx';
 import { useStorage } from './StorageContext.tsx';
@@ -184,6 +185,9 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
         }
       }
 
+      notificationBus.registerPlugins(notificationPlugins);
+      await notificationBus.initializePlugins();
+
       setProviders(providerStates);
       setThemes(themePlugins);
       setNotifications(notificationPlugins);
@@ -301,6 +305,8 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
           };
           recordProviderSnapshots([snapshotInsert]);
         }
+
+        notificationBus.checkProviderUsage(providerId, state.plugin.name, usage);
       }
 
       setProviders((prev) => {
