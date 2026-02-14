@@ -11,6 +11,7 @@ import { usePlugins } from './PluginContext.tsx';
 import { useStorage } from './StorageContext.tsx';
 import type { PricingSource } from '@/storage/types.ts';
 import { useDemoMode } from './DemoModeContext.tsx';
+import { useTimeWindow } from './TimeWindowContext.tsx';
 
 interface AgentSessionContextValue {
   sessions: AgentSessionAggregate[];
@@ -49,6 +50,8 @@ export function AgentSessionProvider({
   const { isInitialized: pluginsInitialized } = usePlugins();
   const { isReady: storageReady, recordAgentSession } = useStorage();
   const { demoMode, simulator } = useDemoMode();
+  const { windowMs } = useTimeWindow();
+  const hasBackfilled = useRef(false);
 
   const discoverAgents = useCallback(async (): Promise<AgentInfo[]> => {
     const agentPlugins = pluginRegistry.getAll('agent');
@@ -224,9 +227,15 @@ export function AgentSessionProvider({
   refreshSessionsRef.current = refreshSessions;
 
   useEffect(() => {
-    if (demoMode || pluginsInitialized) {
-      refreshSessions();
-    }
+    if (!(demoMode || pluginsInitialized)) return;
+
+    const since = windowMs !== null ? Date.now() - windowMs : undefined;
+    refreshSessions(since ? { since } : {}).then(() => {
+      if (since && !hasBackfilled.current) {
+        hasBackfilled.current = true;
+        refreshSessionsRef.current();
+      }
+    });
   }, [pluginsInitialized, demoMode]);
 
   useEffect(() => {

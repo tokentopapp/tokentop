@@ -46,7 +46,11 @@ export function DashboardRuntimeProvider({ children }: { children: ReactNode }) 
     const currentTime = Date.now();
     
     const lastEntry = historyRef.current[historyRef.current.length - 1];
-    if (lastEntry && totalTokens < lastEntry.tokens) {
+    const isDiscontinuity = lastEntry && (
+      totalTokens < lastEntry.tokens ||
+      totalTokens > lastEntry.tokens * 2
+    );
+    if (isDiscontinuity) {
       historyRef.current = [];
     }
     

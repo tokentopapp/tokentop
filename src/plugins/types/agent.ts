@@ -34,6 +34,8 @@ export interface SessionParseOptions {
   sessionId?: string;
   timePeriod?: 'session' | 'daily' | 'weekly' | 'monthly';
   limit?: number;
+  /** Epoch ms — only return sessions updated after this timestamp. */
+  since?: number;
 }
 
 export interface SessionUsageData {

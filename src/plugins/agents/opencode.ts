@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { Database } from 'bun:sqlite';
 import type {
   AgentPlugin,
   AgentFetchContext,
@@ -20,15 +21,369 @@ const OPENCODE_STORAGE_PATH = path.join(os.homedir(), '.local/share/opencode/sto
 const OPENCODE_SESSIONS_PATH = path.join(OPENCODE_STORAGE_PATH, 'session');
 const OPENCODE_MESSAGES_PATH = path.join(OPENCODE_STORAGE_PATH, 'message');
 const OPENCODE_PARTS_PATH = path.join(OPENCODE_STORAGE_PATH, 'part');
+const OPENCODE_DB_PATH = path.join(os.homedir(), '.local/share/opencode/opencode.db');
+
+let sqliteDb: InstanceType<typeof Database> | null = null;
+let sqliteChecked = false;
+let sqliteOpenedAt = 0;
+
+const WAL_RELEASE_INTERVAL_MS = 5 * 60 * 1000;
+
+function getDb(): InstanceType<typeof Database> | null {
+  if (sqliteDb) {
+    if (Date.now() - sqliteOpenedAt > WAL_RELEASE_INTERVAL_MS) {
+      closeDb();
+    } else {
+      return sqliteDb;
+    }
+  }
+  if (sqliteChecked && !sqliteDb) return null;
+
+  try {
+    if (!fsSync.existsSync(OPENCODE_DB_PATH)) {
+      sqliteChecked = true;
+      return null;
+    }
+    sqliteDb = new Database(OPENCODE_DB_PATH, { readonly: true, create: false });
+    sqliteOpenedAt = Date.now();
+    stmts = null;
+    return sqliteDb;
+  } catch {
+    sqliteChecked = true;
+    return null;
+  }
+}
+
+function closeDb(): void {
+  if (sqliteDb) {
+    try { sqliteDb.close(); } catch { /* ignore */ }
+    sqliteDb = null;
+    stmts = null;
+  }
+}
+
+type Stmt = ReturnType<InstanceType<typeof Database>['prepare']>;
+
+interface PreparedStatements {
+  allSessions: Stmt;
+  sessionsSince: Stmt;
+  oneSession: Stmt;
+  sessionMessages: Stmt;
+  uncachedMessages: Stmt;
+  uncachedMessagesSince: Stmt;
+  recentParts: Stmt;
+}
+
+let stmts: PreparedStatements | null = null;
+
+function getStmts(db: InstanceType<typeof Database>): PreparedStatements {
+  if (stmts) return stmts;
+
+  const assistantFilter = `
+    json_extract(m.data, '$.role') = 'assistant'
+    AND json_extract(m.data, '$.tokens.input') IS NOT NULL`;
+
+  stmts = {
+    allSessions: db.prepare(
+      'SELECT id, project_id, title, directory, time_created, time_updated FROM session ORDER BY time_updated DESC'
+    ),
+    sessionsSince: db.prepare(
+      'SELECT id, project_id, title, directory, time_created, time_updated FROM session WHERE time_updated > ? ORDER BY time_updated DESC'
+    ),
+    oneSession: db.prepare(
+      'SELECT id, project_id, title, directory, time_created, time_updated FROM session WHERE id = ?'
+    ),
+    sessionMessages: db.prepare(`
+      SELECT s.id as sid, s.title, s.directory, s.time_updated, m.data
+      FROM session s
+      JOIN message m ON m.session_id = s.id
+      WHERE s.id IN (SELECT value FROM json_each(?))
+        AND ${assistantFilter}
+      ORDER BY s.time_updated DESC, m.time_created DESC
+    `),
+    uncachedMessages: db.prepare(`
+      SELECT s.id as sid, s.title, s.directory, s.time_updated, m.data
+      FROM session s
+      JOIN message m ON m.session_id = s.id
+      WHERE ${assistantFilter}
+      ORDER BY s.time_updated DESC, m.time_created DESC
+    `),
+    uncachedMessagesSince: db.prepare(`
+      SELECT s.id as sid, s.title, s.directory, s.time_updated, m.data
+      FROM session s
+      JOIN message m ON m.session_id = s.id
+      WHERE s.time_updated > ?
+        AND ${assistantFilter}
+      ORDER BY s.time_updated DESC, m.time_created DESC
+    `),
+    recentParts: db.prepare(
+      'SELECT id, message_id, session_id, time_created, data FROM part WHERE time_created > ? ORDER BY time_created ASC'
+    ),
+  };
+
+  return stmts;
+}
+
+interface SessionRow {
+  id: string;
+  project_id: string;
+  title: string;
+  directory: string;
+  time_created: number;
+  time_updated: number;
+}
+
+interface JoinedMessageRow {
+  sid: string;
+  title: string;
+  directory: string;
+  time_updated: number;
+  data: string;
+}
+
+interface PartRow {
+  id: string;
+  message_id: string;
+  session_id: string;
+  time_created: number;
+  data: string;
+}
+
+function parseSessionsSqlite(
+  options: SessionParseOptions,
+  ctx: AgentFetchContext,
+): SessionUsageData[] {
+  const db = getDb();
+  if (!db) return [];
+
+  const now = Date.now();
+
+  if (
+    !options.sessionId &&
+    now - sessionCache.lastCheck < CACHE_TTL_MS &&
+    sessionCache.lastResult.length > 0 &&
+    sessionCache.lastSince === options.since
+  ) {
+    ctx.log.debug('SQLite: using cached sessions (within TTL)', { count: sessionCache.lastResult.length });
+    return sessionCache.lastResult;
+  }
+
+  try {
+    const s = getStmts(db);
+    const sessions: SessionUsageData[] = [];
+
+    let sessionRows: SessionRow[];
+    if (options.sessionId) {
+      sessionRows = s.oneSession.all(options.sessionId) as SessionRow[];
+    } else if (options.since) {
+      sessionRows = s.sessionsSince.all(options.since) as SessionRow[];
+    } else {
+      sessionRows = s.allSessions.all() as SessionRow[];
+    }
+
+    let aggregateCacheHits = 0;
+    let aggregateCacheMisses = 0;
+
+    const uncachedSessionIds: string[] = [];
+    for (const row of sessionRows) {
+      const cached = sessionAggregateCache.get(row.id);
+      if (cached && cached.updatedAt === row.time_updated) {
+        cached.lastAccessed = now;
+        aggregateCacheHits++;
+        sessions.push(...cached.usageRows);
+      } else {
+        aggregateCacheMisses++;
+        uncachedSessionIds.push(row.id);
+      }
+    }
+
+    if (uncachedSessionIds.length > 0) {
+      const sessionLookup = new Map<string, SessionRow>();
+      for (const row of sessionRows) {
+        if (uncachedSessionIds.includes(row.id)) {
+          sessionLookup.set(row.id, row);
+        }
+      }
+
+      let messageRows: JoinedMessageRow[];
+      if (uncachedSessionIds.length === sessionRows.length && !options.sessionId) {
+        messageRows = options.since
+          ? s.uncachedMessagesSince.all(options.since) as JoinedMessageRow[]
+          : s.uncachedMessages.all() as JoinedMessageRow[];
+      } else {
+        messageRows = s.sessionMessages.all(JSON.stringify(uncachedSessionIds)) as JoinedMessageRow[];
+      }
+
+      const sessionUsageMap = new Map<string, SessionUsageData[]>();
+
+      for (const msgRow of messageRows) {
+        let msgData: OpenCodeMessage;
+        try {
+          msgData = JSON.parse(msgRow.data) as OpenCodeMessage;
+        } catch {
+          continue;
+        }
+
+        if (!msgData.tokens) continue;
+
+        const providerId = msgData.providerID ?? msgData.model?.providerID ?? 'unknown';
+        const modelId = msgData.modelID ?? msgData.model?.modelID ?? 'unknown';
+
+        const usage: SessionUsageData = {
+          sessionId: msgRow.sid,
+          providerId,
+          modelId,
+          tokens: {
+            input: msgData.tokens.input ?? 0,
+            output: msgData.tokens.output ?? 0,
+          },
+          timestamp: msgData.time.completed ?? msgData.time.created,
+          sessionUpdatedAt: msgRow.time_updated,
+        };
+
+        if (msgRow.title) usage.sessionName = msgRow.title;
+        if (msgData.tokens.cache?.read) usage.tokens.cacheRead = msgData.tokens.cache.read;
+        if (msgData.tokens.cache?.write) usage.tokens.cacheWrite = msgData.tokens.cache.write;
+        if (msgRow.directory) usage.projectPath = msgRow.directory;
+
+        let arr = sessionUsageMap.get(msgRow.sid);
+        if (!arr) {
+          arr = [];
+          sessionUsageMap.set(msgRow.sid, arr);
+        }
+        arr.push(usage);
+      }
+
+      for (const [sid, usageRows] of sessionUsageMap) {
+        const row = sessionLookup.get(sid);
+        sessionAggregateCache.set(sid, {
+          updatedAt: row?.time_updated ?? 0,
+          usageRows,
+          lastAccessed: now,
+        });
+        sessions.push(...usageRows);
+      }
+
+      for (const sid of uncachedSessionIds) {
+        if (!sessionUsageMap.has(sid)) {
+          const row = sessionLookup.get(sid);
+          sessionAggregateCache.set(sid, {
+            updatedAt: row?.time_updated ?? 0,
+            usageRows: [],
+            lastAccessed: now,
+          });
+        }
+      }
+    }
+
+    evictSessionAggregateCache();
+
+    if (!options.sessionId) {
+      sessionCache.lastCheck = Date.now();
+      sessionCache.lastResult = sessions;
+      sessionCache.lastLimit = options.limit ?? 100;
+      sessionCache.lastSince = options.since;
+    }
+
+    ctx.log.debug('SQLite: parsed sessions', {
+      count: sessions.length,
+      sessionRows: sessionRows.length,
+      aggregateCacheHits,
+      aggregateCacheMisses,
+      aggregateCacheSize: sessionAggregateCache.size,
+    });
+
+    return sessions;
+  } catch (err) {
+    ctx.log.debug('SQLite: query failed, falling back to JSON', { error: err });
+    closeDb();
+    sqliteChecked = false;
+    return [];
+  }
+}
+
+interface SqliteActivityState {
+  timer: ReturnType<typeof setInterval> | null;
+  callback: ActivityCallback | null;
+  lastPartTime: number;
+}
+
+const sqliteActivity: SqliteActivityState = {
+  timer: null,
+  callback: null,
+  lastPartTime: 0,
+};
+
+const SQLITE_POLL_INTERVAL_MS = 1000;
+
+function startActivityWatchSqlite(callback: ActivityCallback): void {
+  sqliteActivity.callback = callback;
+
+  if (sqliteActivity.timer) return;
+
+  sqliteActivity.lastPartTime = Date.now();
+
+  sqliteActivity.timer = setInterval(() => {
+    const db = getDb();
+    if (!db || !sqliteActivity.callback) return;
+
+    try {
+      const s = getStmts(db);
+      const rows = s.recentParts.all(sqliteActivity.lastPartTime) as PartRow[];
+
+      for (const row of rows) {
+        if (row.time_created > sqliteActivity.lastPartTime) {
+          sqliteActivity.lastPartTime = row.time_created;
+        }
+
+        let partData: OpenCodePart;
+        try {
+          partData = JSON.parse(row.data) as OpenCodePart;
+        } catch {
+          continue;
+        }
+
+        if (!partData.tokens) continue;
+
+        const tokens: ActivityUpdate['tokens'] = {
+          input: partData.tokens.input ?? 0,
+          output: partData.tokens.output ?? 0,
+        };
+        if (partData.tokens.reasoning !== undefined) tokens.reasoning = partData.tokens.reasoning;
+        if (partData.tokens.cache?.read !== undefined) tokens.cacheRead = partData.tokens.cache.read;
+        if (partData.tokens.cache?.write !== undefined) tokens.cacheWrite = partData.tokens.cache.write;
+
+        sqliteActivity.callback({
+          sessionId: row.session_id,
+          messageId: row.message_id,
+          tokens,
+          timestamp: row.time_created,
+        });
+      }
+    } catch {
+    }
+  }, SQLITE_POLL_INTERVAL_MS);
+}
+
+function stopActivityWatchSqlite(): void {
+  if (sqliteActivity.timer) {
+    clearInterval(sqliteActivity.timer);
+    sqliteActivity.timer = null;
+  }
+  sqliteActivity.callback = null;
+  sqliteActivity.lastPartTime = 0;
+}
 
 const sessionCache: {
   lastCheck: number;
   lastResult: SessionUsageData[];
   lastLimit: number;
+  lastSince: number | undefined;
 } = {
   lastCheck: 0,
   lastResult: [],
   lastLimit: 0,
+  lastSince: undefined,
 };
 
 const CACHE_TTL_MS = 2000;
@@ -338,7 +693,7 @@ function watchMessageDir(msgDirPath: string): void {
   }
 }
 
-function startActivityWatch(callback: ActivityCallback): void {
+function startActivityWatchJson(callback: ActivityCallback): void {
   if (activityWatcher.watcher) {
     activityWatcher.callback = callback;
     return;
@@ -359,7 +714,7 @@ function startActivityWatch(callback: ActivityCallback): void {
   }
 }
 
-function stopActivityWatch(): void {
+function stopActivityWatchJson(): void {
   if (activityWatcher.debounceTimer) {
     clearTimeout(activityWatcher.debounceTimer);
     activityWatcher.debounceTimer = null;
@@ -380,6 +735,247 @@ function stopActivityWatch(): void {
   activityWatcher.pendingDirs.clear();
 
   stopSessionWatcher();
+}
+
+async function parseSessionsJson(
+  options: SessionParseOptions,
+  ctx: AgentFetchContext,
+): Promise<SessionUsageData[]> {
+  const limit = options.limit ?? 100;
+
+  try {
+    await fs.access(OPENCODE_STORAGE_PATH);
+  } catch {
+    ctx.log.debug('No OpenCode storage directory found');
+    return [];
+  }
+
+  startSessionWatcher();
+
+  const now = Date.now();
+  if (
+    !options.sessionId &&
+    limit === sessionCache.lastLimit &&
+    now - sessionCache.lastCheck < CACHE_TTL_MS &&
+    sessionCache.lastResult.length > 0 &&
+    sessionCache.lastSince === options.since
+  ) {
+    ctx.log.debug('JSON: using cached sessions (within TTL)', { count: sessionCache.lastResult.length });
+    return sessionCache.lastResult;
+  }
+
+  const dirtyPaths = new Set(sessionWatcher.dirtyPaths);
+  sessionWatcher.dirtyPaths.clear();
+
+  const needsFullStat = forceFullReconciliation;
+  if (forceFullReconciliation) {
+    forceFullReconciliation = false;
+    ctx.log.debug('JSON: full reconciliation sweep triggered');
+  }
+
+  const sessions: SessionUsageData[] = [];
+  const sessionFiles: Array<{ path: string; session: OpenCodeSession }> = [];
+
+  let statCount = 0;
+  let statSkipCount = 0;
+  let parseCount = 0;
+  let dirtyHitCount = 0;
+
+  const seenFilePaths = new Set<string>();
+
+  try {
+    const projectDirs = await fs.readdir(OPENCODE_SESSIONS_PATH, { withFileTypes: true });
+
+    for (const projectDir of projectDirs) {
+      if (!projectDir.isDirectory()) continue;
+
+      const projectPath = path.join(OPENCODE_SESSIONS_PATH, projectDir.name);
+
+      watchProjectDir(projectPath);
+
+      const sessionEntries = await fs.readdir(projectPath, { withFileTypes: true });
+
+      for (const entry of sessionEntries) {
+        if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+
+        const sessionFilePath = path.join(projectPath, entry.name);
+        seenFilePaths.add(sessionFilePath);
+
+        const isDirty = dirtyPaths.has(sessionFilePath);
+        if (isDirty) dirtyHitCount++;
+
+        const cached = sessionMetadataIndex.get(sessionFilePath);
+
+        if (!isDirty && !needsFullStat && cached) {
+          statSkipCount++;
+          const session = cached.session;
+          if (session?.id) {
+            if (options.sessionId && session.id !== options.sessionId) continue;
+            sessionFiles.push({ path: sessionFilePath, session });
+          }
+          continue;
+        }
+
+        statCount++;
+        let mtimeMs: number;
+        try {
+          const stat = await fs.stat(sessionFilePath);
+          mtimeMs = stat.mtimeMs;
+        } catch {
+          sessionMetadataIndex.delete(sessionFilePath);
+          continue;
+        }
+
+        if (cached && cached.mtimeMs === mtimeMs) {
+          const session = cached.session;
+          if (session?.id) {
+            if (options.sessionId && session.id !== options.sessionId) continue;
+            sessionFiles.push({ path: sessionFilePath, session });
+          }
+          continue;
+        }
+
+        parseCount++;
+        const session = await readJsonFile<OpenCodeSession>(sessionFilePath);
+
+        if (session?.id) {
+          sessionMetadataIndex.set(sessionFilePath, { mtimeMs, session });
+          if (options.sessionId && session.id !== options.sessionId) continue;
+          sessionFiles.push({ path: sessionFilePath, session });
+        } else {
+          sessionMetadataIndex.delete(sessionFilePath);
+        }
+      }
+    }
+  } catch (err) {
+    ctx.log.debug('JSON: failed to read session directories', { error: err });
+    return sessions;
+  }
+
+  for (const cachedPath of sessionMetadataIndex.keys()) {
+    if (!seenFilePaths.has(cachedPath)) {
+      sessionMetadataIndex.delete(cachedPath);
+    }
+  }
+
+  if (options.since) {
+    const since = options.since;
+    for (let i = sessionFiles.length - 1; i >= 0; i--) {
+      if (sessionFiles[i]!.session.time.updated < since) {
+        sessionFiles.splice(i, 1);
+      }
+    }
+  }
+
+  sessionFiles.sort((a, b) => b.session.time.updated - a.session.time.updated);
+
+  let aggregateCacheHits = 0;
+  let aggregateCacheMisses = 0;
+
+  for (const { session } of sessionFiles) {
+    const cached = sessionAggregateCache.get(session.id);
+    if (cached && cached.updatedAt === session.time.updated) {
+      cached.lastAccessed = now;
+      aggregateCacheHits++;
+      sessions.push(...cached.usageRows);
+      continue;
+    }
+
+    aggregateCacheMisses++;
+
+    const messagesDir = path.join(OPENCODE_MESSAGES_PATH, session.id);
+
+    try {
+      await fs.access(messagesDir);
+    } catch {
+      continue;
+    }
+
+    const messageFiles = await fs.readdir(messagesDir, { withFileTypes: true });
+
+    const messageData: Array<{ file: string; mtime: number }> = [];
+    for (const msgFile of messageFiles) {
+      if (!msgFile.isFile() || !msgFile.name.endsWith('.json')) continue;
+      const msgPath = path.join(messagesDir, msgFile.name);
+      try {
+        const stat = await fs.stat(msgPath);
+        messageData.push({ file: msgPath, mtime: stat.mtimeMs });
+      } catch {
+        continue;
+      }
+    }
+
+    messageData.sort((a, b) => b.mtime - a.mtime);
+
+    const sessionUsageRows: SessionUsageData[] = [];
+
+    for (const { file: msgPath } of messageData) {
+      const message = await readJsonFile<OpenCodeMessage>(msgPath);
+
+      if (!message || message.role !== 'assistant' || !message.tokens) continue;
+
+      const providerId = message.providerID ?? message.model?.providerID ?? 'unknown';
+      const modelId = message.modelID ?? message.model?.modelID ?? 'unknown';
+
+      const usage: SessionUsageData = {
+        sessionId: session.id,
+        providerId,
+        modelId,
+        tokens: {
+          input: message.tokens.input ?? 0,
+          output: message.tokens.output ?? 0,
+        },
+        timestamp: message.time.completed ?? message.time.created,
+        sessionUpdatedAt: session.time.updated,
+      };
+
+      if (session.title) {
+        usage.sessionName = session.title;
+      }
+      if (message.tokens.cache?.read) {
+        usage.tokens.cacheRead = message.tokens.cache.read;
+      }
+      if (message.tokens.cache?.write) {
+        usage.tokens.cacheWrite = message.tokens.cache.write;
+      }
+      if (session.directory) {
+        usage.projectPath = session.directory;
+      }
+
+      sessionUsageRows.push(usage);
+    }
+
+    sessionAggregateCache.set(session.id, {
+      updatedAt: session.time.updated,
+      usageRows: sessionUsageRows,
+      lastAccessed: now,
+    });
+
+    sessions.push(...sessionUsageRows);
+  }
+
+  evictSessionAggregateCache();
+
+  if (!options.sessionId) {
+    sessionCache.lastCheck = Date.now();
+    sessionCache.lastResult = sessions;
+    sessionCache.lastLimit = limit;
+    sessionCache.lastSince = options.since;
+  }
+
+  ctx.log.debug('JSON: parsed OpenCode sessions', {
+    count: sessions.length,
+    sessionFiles: sessionFiles.length,
+    statChecks: statCount,
+    statSkips: statSkipCount,
+    jsonParses: parseCount,
+    dirtyHits: dirtyHitCount,
+    aggregateCacheHits,
+    aggregateCacheMisses,
+    metadataIndexSize: sessionMetadataIndex.size,
+    aggregateCacheSize: sessionAggregateCache.size,
+  });
+  return sessions;
 }
 
 function buildOAuthCredentials(
@@ -439,10 +1035,22 @@ export const opencodeAgentPlugin: AgentPlugin = {
     multiProvider: true,
   },
 
-  startActivityWatch,
-  stopActivityWatch,
+  startActivityWatch(callback: ActivityCallback): void {
+    if (getDb()) {
+      startActivityWatchSqlite(callback);
+    } else {
+      startActivityWatchJson(callback);
+    }
+  },
+
+  stopActivityWatch(): void {
+    stopActivityWatchSqlite();
+    stopActivityWatchJson();
+    closeDb();
+  },
 
   async isInstalled(): Promise<boolean> {
+    if (fsSync.existsSync(OPENCODE_DB_PATH)) return true;
     try {
       await fs.access(OPENCODE_CONFIG_PATH);
       return true;
@@ -491,231 +1099,10 @@ export const opencodeAgentPlugin: AgentPlugin = {
   },
 
   async parseSessions(options: SessionParseOptions, ctx: AgentFetchContext): Promise<SessionUsageData[]> {
-    const limit = options.limit ?? 100;
+    const sqliteResult = parseSessionsSqlite(options, ctx);
+    if (sqliteResult.length > 0) return sqliteResult;
 
-    try {
-      await fs.access(OPENCODE_STORAGE_PATH);
-    } catch {
-      ctx.log.debug('No OpenCode storage directory found');
-      return [];
-    }
-
-    startSessionWatcher();
-
-    const now = Date.now();
-    if (
-      !options.sessionId &&
-      limit === sessionCache.lastLimit &&
-      now - sessionCache.lastCheck < CACHE_TTL_MS &&
-      sessionCache.lastResult.length > 0
-    ) {
-      ctx.log.debug('Using cached sessions (within TTL)', { count: sessionCache.lastResult.length });
-      return sessionCache.lastResult;
-    }
-
-    const dirtyPaths = new Set(sessionWatcher.dirtyPaths);
-    sessionWatcher.dirtyPaths.clear();
-
-    const needsFullStat = forceFullReconciliation;
-    if (forceFullReconciliation) {
-      forceFullReconciliation = false;
-      ctx.log.debug('Full reconciliation sweep triggered');
-    }
-
-    const sessions: SessionUsageData[] = [];
-    const sessionFiles: Array<{ path: string; session: OpenCodeSession }> = [];
-
-    let statCount = 0;
-    let statSkipCount = 0;
-    let parseCount = 0;
-    let dirtyHitCount = 0;
-
-    const seenFilePaths = new Set<string>();
-
-    try {
-      const projectDirs = await fs.readdir(OPENCODE_SESSIONS_PATH, { withFileTypes: true });
-
-      for (const projectDir of projectDirs) {
-        if (!projectDir.isDirectory()) continue;
-
-        const projectPath = path.join(OPENCODE_SESSIONS_PATH, projectDir.name);
-
-        watchProjectDir(projectPath);
-
-        const sessionEntries = await fs.readdir(projectPath, { withFileTypes: true });
-
-        for (const entry of sessionEntries) {
-          if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
-
-          const sessionFilePath = path.join(projectPath, entry.name);
-          seenFilePaths.add(sessionFilePath);
-
-          const isDirty = dirtyPaths.has(sessionFilePath);
-          if (isDirty) dirtyHitCount++;
-
-          const cached = sessionMetadataIndex.get(sessionFilePath);
-
-          // Skip stat for clean, non-reconciliation files with cached metadata
-          if (!isDirty && !needsFullStat && cached) {
-            statSkipCount++;
-            const session = cached.session;
-            if (session?.id) {
-              if (options.sessionId && session.id !== options.sessionId) continue;
-              sessionFiles.push({ path: sessionFilePath, session });
-            }
-            continue;
-          }
-
-          statCount++;
-          let mtimeMs: number;
-          try {
-            const stat = await fs.stat(sessionFilePath);
-            mtimeMs = stat.mtimeMs;
-          } catch {
-            sessionMetadataIndex.delete(sessionFilePath);
-            continue;
-          }
-
-          if (cached && cached.mtimeMs === mtimeMs) {
-            const session = cached.session;
-            if (session?.id) {
-              if (options.sessionId && session.id !== options.sessionId) continue;
-              sessionFiles.push({ path: sessionFilePath, session });
-            }
-            continue;
-          }
-
-          parseCount++;
-          const session = await readJsonFile<OpenCodeSession>(sessionFilePath);
-
-          if (session?.id) {
-            sessionMetadataIndex.set(sessionFilePath, { mtimeMs, session });
-            if (options.sessionId && session.id !== options.sessionId) continue;
-            sessionFiles.push({ path: sessionFilePath, session });
-          } else {
-            sessionMetadataIndex.delete(sessionFilePath);
-          }
-        }
-      }
-    } catch (err) {
-      ctx.log.debug('Failed to read session directories', { error: err });
-      return sessions;
-    }
-
-    for (const cachedPath of sessionMetadataIndex.keys()) {
-      if (!seenFilePaths.has(cachedPath)) {
-        sessionMetadataIndex.delete(cachedPath);
-      }
-    }
-
-    sessionFiles.sort((a, b) => b.session.time.updated - a.session.time.updated);
-
-    let aggregateCacheHits = 0;
-    let aggregateCacheMisses = 0;
-
-    for (const { session } of sessionFiles) {
-      const cached = sessionAggregateCache.get(session.id);
-      if (cached && cached.updatedAt === session.time.updated) {
-        cached.lastAccessed = now;
-        aggregateCacheHits++;
-        sessions.push(...cached.usageRows);
-        continue;
-      }
-
-      aggregateCacheMisses++;
-
-      const messagesDir = path.join(OPENCODE_MESSAGES_PATH, session.id);
-
-      try {
-        await fs.access(messagesDir);
-      } catch {
-        continue;
-      }
-
-      const messageFiles = await fs.readdir(messagesDir, { withFileTypes: true });
-      
-      const messageData: Array<{ file: string; mtime: number }> = [];
-      for (const msgFile of messageFiles) {
-        if (!msgFile.isFile() || !msgFile.name.endsWith('.json')) continue;
-        const msgPath = path.join(messagesDir, msgFile.name);
-        try {
-          const stat = await fs.stat(msgPath);
-          messageData.push({ file: msgPath, mtime: stat.mtimeMs });
-        } catch {
-          continue;
-        }
-      }
-      
-      messageData.sort((a, b) => b.mtime - a.mtime);
-
-      const sessionUsageRows: SessionUsageData[] = [];
-
-      for (const { file: msgPath } of messageData) {
-        const message = await readJsonFile<OpenCodeMessage>(msgPath);
-
-        if (!message || message.role !== 'assistant' || !message.tokens) continue;
-
-        const providerId = message.providerID ?? message.model?.providerID ?? 'unknown';
-        const modelId = message.modelID ?? message.model?.modelID ?? 'unknown';
-
-        const usage: SessionUsageData = {
-          sessionId: session.id,
-          providerId,
-          modelId,
-          tokens: {
-            input: message.tokens.input ?? 0,
-            output: message.tokens.output ?? 0,
-          },
-          timestamp: message.time.completed ?? message.time.created,
-          sessionUpdatedAt: session.time.updated,
-        };
-
-        if (session.title) {
-          usage.sessionName = session.title;
-        }
-        if (message.tokens.cache?.read) {
-          usage.tokens.cacheRead = message.tokens.cache.read;
-        }
-        if (message.tokens.cache?.write) {
-          usage.tokens.cacheWrite = message.tokens.cache.write;
-        }
-        if (session.directory) {
-          usage.projectPath = session.directory;
-        }
-
-        sessionUsageRows.push(usage);
-      }
-
-      sessionAggregateCache.set(session.id, {
-        updatedAt: session.time.updated,
-        usageRows: sessionUsageRows,
-        lastAccessed: now,
-      });
-
-      sessions.push(...sessionUsageRows);
-    }
-
-    evictSessionAggregateCache();
-
-    if (!options.sessionId) {
-      sessionCache.lastCheck = Date.now();
-      sessionCache.lastResult = sessions;
-      sessionCache.lastLimit = limit;
-    }
-
-    ctx.log.debug('Parsed OpenCode sessions', {
-      count: sessions.length,
-      sessionFiles: sessionFiles.length,
-      statChecks: statCount,
-      statSkips: statSkipCount,
-      jsonParses: parseCount,
-      dirtyHits: dirtyHitCount,
-      aggregateCacheHits,
-      aggregateCacheMisses,
-      metadataIndexSize: sessionMetadataIndex.size,
-      aggregateCacheSize: sessionAggregateCache.size,
-    });
-    return sessions;
+    return parseSessionsJson(options, ctx);
   },
 
   async getProviders(ctx: AgentFetchContext): Promise<AgentProviderConfig[]> {
