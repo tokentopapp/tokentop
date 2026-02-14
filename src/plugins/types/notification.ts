@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BasePlugin, ConfigField, PluginLogger } from './base.ts';
+import type { BasePlugin, PluginLogger } from './base.ts';
 
 export const NotificationCapabilitiesSchema = z.object({
   alerts: z.boolean(),
@@ -46,7 +46,6 @@ export interface NotificationContext {
 export interface NotificationPlugin extends BasePlugin {
   readonly type: 'notification';
   readonly capabilities: NotificationCapabilities;
-  readonly configSchema?: Record<string, ConfigField>;
 
   initialize(config: NotificationConfig, ctx: NotificationContext): Promise<void>;
   notify(notification: Notification, ctx: NotificationContext): Promise<NotificationResult>;

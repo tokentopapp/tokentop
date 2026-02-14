@@ -69,6 +69,9 @@ export interface BasePlugin {
 
   /** Required permissions */
   readonly permissions: PluginPermissions;
+
+  /** Plugin-declared configuration fields, rendered in Settings UI */
+  readonly configSchema?: Record<string, ConfigField>;
 }
 
 /**

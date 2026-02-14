@@ -3,10 +3,12 @@ import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { useColors } from '../contexts/ThemeContext.tsx';
 import { useToastContext } from '../contexts/ToastContext.tsx';
 import { useConfig } from '../contexts/ConfigContext.tsx';
+import { usePlugins } from '../contexts/PluginContext.tsx';
 import { useDemoMode } from '../contexts/DemoModeContext.tsx';
 import { type AppConfig } from '@/config/schema.ts';
+import type { ConfigField } from '@/plugins/types/base.ts';
 
-type SettingCategory = 'refresh' | 'display' | 'budgets' | 'alerts' | 'notifications';
+type SettingCategory = 'refresh' | 'display' | 'budgets' | 'alerts' | 'notifications' | 'plugins';
 
 interface SettingItem {
   key: string;
@@ -182,12 +184,89 @@ const CATEGORIES: { id: SettingCategory; label: string }[] = [
   { id: 'budgets', label: 'Budgets' },
   { id: 'alerts', label: 'Alerts' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'plugins', label: 'Plugins' },
 ];
+
+function buildPluginSettings(plugins: Array<{ id: string; name: string; configSchema?: Record<string, ConfigField> }>): SettingItem[] {
+  const items: SettingItem[] = [];
+  for (const plugin of plugins) {
+    if (!plugin.configSchema) continue;
+    for (const [fieldKey, field] of Object.entries(plugin.configSchema)) {
+      const settingKey = `${plugin.id}.${fieldKey}`;
+      const label = `${plugin.name} › ${field.description ?? fieldKey}`;
+
+      const getPluginValue = (c: AppConfig): unknown => {
+        const pluginCfg = c.pluginConfig[plugin.id];
+        const raw = pluginCfg?.[fieldKey];
+        return raw ?? field.default;
+      };
+
+      const setPluginValue = (c: AppConfig, value: unknown): AppConfig => ({
+        ...c,
+        pluginConfig: {
+          ...c.pluginConfig,
+          [plugin.id]: {
+            ...(c.pluginConfig[plugin.id] ?? {}),
+            [fieldKey]: value,
+          },
+        },
+      });
+
+      if (field.type === 'boolean') {
+        items.push({
+          key: settingKey,
+          label,
+          category: 'plugins' as SettingCategory,
+          type: 'toggle',
+          getValue: (c) => getPluginValue(c) as boolean,
+          setValue: (c, v) => setPluginValue(c, v),
+        });
+      } else if (field.type === 'select' && field.options) {
+        items.push({
+          key: settingKey,
+          label,
+          category: 'plugins' as SettingCategory,
+          type: 'select',
+          options: field.options.map((o) => o.label),
+          getValue: (c) => {
+            const val = getPluginValue(c) as string;
+            const opt = field.options?.find((o) => o.value === val);
+            return opt?.label ?? val ?? '';
+          },
+          setValue: (c, v) => {
+            const opt = field.options?.find((o) => o.label === v);
+            return setPluginValue(c, opt?.value ?? v);
+          },
+        });
+      } else if (field.type === 'number') {
+        items.push({
+          key: settingKey,
+          label,
+          category: 'plugins' as SettingCategory,
+          type: 'number',
+          getValue: (c) => (getPluginValue(c) as number) ?? 0,
+          setValue: (c, v) => setPluginValue(c, v),
+        });
+      } else {
+        items.push({
+          key: settingKey,
+          label,
+          category: 'plugins' as SettingCategory,
+          type: 'select',
+          getValue: (c) => String(getPluginValue(c) ?? ''),
+          setValue: (c, v) => setPluginValue(c, v),
+        });
+      }
+    }
+  }
+  return items;
+}
 
 export function SettingsView() {
   const colors = useColors();
   const { showToast } = useToastContext();
   const { config, isLoading, updateConfig, resetToDefaults, saveNow } = useConfig();
+  const { providers, notifications } = usePlugins();
   const { demoMode, seed, preset } = useDemoMode();
   const { width: terminalWidth } = useTerminalDimensions();
   
@@ -195,7 +274,16 @@ export function SettingsView() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [focusedPane, setFocusedPane] = useState<'categories' | 'settings'>('settings');
   
-  const categorySettings = SETTINGS.filter(s => s.category === selectedCategory);
+  const pluginSettings = useMemo(() => {
+    const allPlugins = [
+      ...Array.from(providers.values()).map((p) => p.plugin),
+      ...notifications,
+    ];
+    return buildPluginSettings(allPlugins);
+  }, [providers, notifications, config]);
+
+  const allSettings = useMemo(() => [...SETTINGS, ...pluginSettings], [pluginSettings]);
+  const categorySettings = allSettings.filter(s => s.category === selectedCategory);
   
   const helpText = useMemo(() => {
     if (terminalWidth >= 100) {

@@ -57,6 +57,7 @@ export interface AppConfig {
     hideUnconfigured: boolean;
   };
   plugins: PluginsConfig;
+  pluginConfig: Record<string, Record<string, unknown>>;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -101,6 +102,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     npm: [],
     disabled: [],
   },
+  pluginConfig: {},
 };
 
 function deepMerge(target: AppConfig, source: Partial<AppConfig>): AppConfig {
@@ -137,6 +139,10 @@ function deepMerge(target: AppConfig, source: Partial<AppConfig>): AppConfig {
     plugins: {
       ...target.plugins,
       ...(source.plugins ?? {}),
+    },
+    pluginConfig: {
+      ...target.pluginConfig,
+      ...(source.pluginConfig ?? {}),
     },
   };
 }
