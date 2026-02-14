@@ -1,0 +1,106 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the sections below so we can reproduce and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+      placeholder: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the behavior.
+      placeholder: |
+        1. Run `ttop`
+        2. Press '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / terminal captures
+      description: If applicable, add screenshots or frame captures (`Ctrl+P` in ttop) to help explain the problem.
+
+  - type: input
+    id: ttop-version
+    attributes:
+      label: tokentop version
+      description: Output of `ttop --version` or git commit hash.
+      placeholder: "0.1.0 / abc1234"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows (WSL)
+        - Windows (native)
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal emulator
+      description: Which terminal are you using?
+      placeholder: "iTerm2, Ghostty, Alacritty, Windows Terminal, etc."
+
+  - type: input
+    id: bun-version
+    attributes:
+      label: Bun version
+      description: Output of `bun --version`.
+      placeholder: "1.2.3"
+
+  - type: dropdown
+    id: agents
+    attributes:
+      label: Coding agents in use
+      description: Which agents are you monitoring?
+      multiple: true
+      options:
+        - OpenCode
+        - Claude Code
+        - Cursor
+        - Windsurf
+        - Gemini CLI
+        - None / Demo mode
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any error output or debug console output (`~` key in ttop).
+      render: shell
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that might help — config, environment, workarounds tried.
