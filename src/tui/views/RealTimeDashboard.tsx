@@ -9,6 +9,7 @@ import { useConfig } from '../contexts/ConfigContext.tsx';
 import { useDashboardRuntime } from '../contexts/DashboardRuntimeContext.tsx';
 import { useDrawer } from '../contexts/DrawerContext.tsx';
 import { useDashboardKeyboard } from '../hooks/useDashboardKeyboard.ts';
+import { getProviderColor } from '../utils/providerColor.ts';
 
 
 
@@ -80,13 +81,10 @@ export function RealTimeDashboard() {
     return Math.max(primary, secondary);
   }
 
-  const getProviderColor = (id: string) => {
-    if (id.includes('anthropic') || id.includes('claude')) return '#d97757';
-    if (id.includes('openai') || id.includes('codex')) return '#10a37f';
-    if (id.includes('google') || id.includes('gemini')) return '#4285f4';
-    if (id.includes('github') || id.includes('copilot')) return '#6e40c9';
-    return colors.primary;
-  };
+  const providerColorOf = useCallback(
+    (id: string) => getProviderColor(id, providers, colors.primary),
+    [providers, colors.primary],
+  );
 
   const baseFilteredSessions = useMemo(() => {
     let result = [...agentSessions];
@@ -317,7 +315,7 @@ export function RealTimeDashboard() {
           id: p.plugin.id,
           name: p.plugin.name,
           usedPercent: getMaxUsedPercent(p),
-          color: getProviderColor(p.plugin.id),
+          color: providerColorOf(p.plugin.id),
           ...(p.usage?.error ? { error: p.usage.error } : {}),
         }))}
         focused={focusedPanel === 'limits'}
@@ -347,7 +345,7 @@ export function RealTimeDashboard() {
           filterQuery={filterQuery}
           focusedPanel={focusedPanel}
           windowLabel={windowLabel}
-          getProviderColor={getProviderColor}
+          getProviderColor={providerColorOf}
         />
 
         {!effectiveSidebarCollapsed && (
@@ -358,7 +356,7 @@ export function RealTimeDashboard() {
             dimension={driverDimension}
             selectedDriverIndex={selectedDriverIndex}
             activeDriverFilter={activeDriverFilter}
-            getProviderColor={getProviderColor}
+            getProviderColor={providerColorOf}
           />
         )}
       </box>

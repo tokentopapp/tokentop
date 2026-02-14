@@ -12,6 +12,7 @@ export type SidebarMode = 'full' | 'compact' | 'minimal' | 'micro' | 'hidden';
 
 export interface DriverStats {
   id: string;
+  providerId?: string;
   displayName: string;
   cost: number;
   costShare: number;
@@ -309,7 +310,7 @@ function TopDriversSection({
           const bar = showBars ? makeProgressBar(driver.costShare, barWidth) : '';
           
           const textColor = isSelected ? colors.text : colors.textSubtle;
-          const nameColor = isSelected ? colors.primary : getProviderColor(driver.id);
+          const nameColor = isSelected ? colors.primary : getProviderColor(driver.providerId ?? driver.id);
           
           if (showBars) {
             return (
@@ -521,6 +522,7 @@ export function SmartSidebar({
   
   const drivers = useMemo((): DriverStats[] => {
     const stats: Record<string, { cost: number; tokens: number; delta5m: number }> = {};
+    const providerForKey: Record<string, string> = {};
     const now = Date.now();
     const fiveMinAgo = now - 5 * 60 * 1000;
     
@@ -530,6 +532,7 @@ export function SmartSidebar({
         switch (dimension) {
           case 'model':
             key = st.modelId;
+            if (!providerForKey[key]) providerForKey[key] = st.providerId;
             break;
           case 'project':
             key = extractRepoName(s.projectPath);
@@ -564,6 +567,7 @@ export function SmartSidebar({
           : id;
         return {
           id,
+          ...(providerForKey[id] != null ? { providerId: providerForKey[id] } : {}),
           displayName,
           cost: data.cost,
           costShare: totalCost > 0 ? (data.cost / totalCost) * 100 : 0,
@@ -615,7 +619,7 @@ export function SmartSidebar({
          {mode === 'micro' && drivers[0] && (
            <box flexDirection="row" paddingX={1} height={1}>
              <text fg={colors.textMuted} height={1}>Top: </text>
-             <text fg={getProviderColor(drivers[0].id)} height={1}>
+             <text fg={getProviderColor(drivers[0].providerId ?? drivers[0].id)} height={1}>
                {truncateWithEllipsis(drivers[0].displayName, 10)}
              </text>
              <text fg={colors.text} height={1}> {formatCurrency(drivers[0].cost)}</text>

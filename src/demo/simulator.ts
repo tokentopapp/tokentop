@@ -140,12 +140,6 @@ const PROVIDER_LIMITS: Record<string, { label: string; windowMinutes: number }> 
   'google-gemini': { label: 'Daily Tokens', windowMinutes: 1440 },
 };
 
-const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: '#D97706',
-  openai: '#10A37F',
-  'google-gemini': '#4285F4',
-};
-
 const EXTRA_PROVIDERS: Array<{ id: string; label: string; balance?: string }> = [
   { id: 'codex', label: 'ChatGPT Plus', balance: '$18.00' },
   { id: 'github-copilot', label: 'Copilot Pro', balance: '$26.00' },
@@ -588,10 +582,6 @@ export class DemoSimulator {
       providerUsage: new Map(this.providerUsage),
       usageEvents,
     };
-  }
-
-  getProviderColors(): Record<string, string> {
-    return PROVIDER_COLORS;
   }
 
   getSeed(): number {

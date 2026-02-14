@@ -19,14 +19,19 @@ export function SidebarBreakdown({
 }: SidebarBreakdownProps) {
   const colors = useColors();
 
-  const modelStats = useMemo(() => {
+  const { modelStats, modelProviders } = useMemo(() => {
     const stats: Record<string, number> = {};
+    const providers: Record<string, string> = {};
     sessions.forEach(s => {
       s.streams.forEach((st: AgentSessionStream) => {
         stats[st.modelId] = (stats[st.modelId] || 0) + (st.costUsd ?? 0);
+        if (!providers[st.modelId]) providers[st.modelId] = st.providerId;
       });
     });
-    return Object.entries(stats).sort(([, a], [, b]) => b - a).slice(0, 5);
+    return {
+      modelStats: Object.entries(stats).sort(([, a], [, b]) => b - a).slice(0, 5),
+      modelProviders: providers,
+    };
   }, [sessions]);
 
   const providerStats = useMemo(() => {
@@ -60,7 +65,7 @@ export function SidebarBreakdown({
               <text height={1} fg={colors.textMuted}>{formatCurrency(cost).padStart(7)}</text>
             </box>
             <box flexDirection="row" height={1}>
-              <text height={1} fg={getProviderColor(modelId)}>
+              <text height={1} fg={getProviderColor(modelProviders[modelId] ?? modelId)}>
                 {'█'.repeat(Math.ceil((cost / maxModelCost) * 20)).padEnd(20)}
               </text>
             </box>
