@@ -5,22 +5,25 @@ tokentop's plugin system lets you add new providers, coding agents, themes, and 
 ## Quick Start
 
 ```bash
-# Load a local plugin for one session
-ttop --plugin ./my-plugin
-
-# Or install a community plugin
-bun add tokentop-provider-replicate
+# Install the SDK
+bun add @tokentop/plugin-sdk
 ```
 
-Then add it to your config so it loads every time:
+Add community plugins to your config and they auto-install on next launch:
 
 ```jsonc
 // ~/.config/tokentop/config.json
 {
   "plugins": {
-    "npm": ["tokentop-provider-replicate"]
+    "npm": ["tokentop-provider-replicate", "tokentop-theme-catppuccin"]
   }
 }
+```
+
+Or load a local plugin for development:
+
+```bash
+ttop --plugin ./my-plugin
 ```
 
 ## Plugin Types
@@ -36,7 +39,7 @@ Then add it to your config so it loads every time:
 
 ### Official plugins (`@tokentop/*`)
 
-Maintained by the tokentop team or trusted contributors. Published under the `@tokentop` npm org.
+Maintained by the tokentop team. Published under the `@tokentop` npm org.
 
 | Type | npm name |
 |------|----------|
@@ -47,7 +50,7 @@ Maintained by the tokentop team or trusted contributors. Published under the `@t
 
 ### Community plugins (`tokentop-*`)
 
-Published by anyone — no npm org membership needed. Use the `tokentop-{type}-` prefix:
+Published by anyone — no npm org membership needed:
 
 | Type | npm name |
 |------|----------|
@@ -62,9 +65,26 @@ Scoped community plugins also work: `@yourname/tokentop-provider-foo`
 
 Plugins load from three sources, in order:
 
-1. **Builtins** -- shipped with tokentop
-2. **Local plugins** -- from the plugins directory, config paths, and CLI flags
-3. **npm plugins** -- installed packages listed in config
+1. **Builtins** — shipped with tokentop
+2. **Local plugins** — from the plugins directory, config paths, and CLI flags
+3. **npm plugins** — auto-installed from config on startup
+
+### npm Plugins (Auto-Install)
+
+List packages in your config. tokentop installs them automatically into `~/.cache/tokentop/` on launch:
+
+```jsonc
+{
+  "plugins": {
+    "npm": [
+      "tokentop-theme-catppuccin",
+      "tokentop-provider-replicate@1.0.0"
+    ]
+  }
+}
+```
+
+Pin a version with `@1.0.0` or omit for latest.
 
 ### CLI Flag (`--plugin`)
 
@@ -86,13 +106,12 @@ Persistent plugin configuration lives in `~/.config/tokentop/config.json`:
 ```jsonc
 {
   "plugins": {
-    // Local paths -- loaded every run
+    // Local paths — loaded every run
     "local": [
-      "~/development/my-provider",
-      "../relative/to/config/dir"
+      "~/development/my-provider"
     ],
 
-    // npm packages -- must be installed in node_modules
+    // npm packages — auto-installed on startup
     "npm": [
       "tokentop-provider-replicate",
       "tokentop-theme-catppuccin"
@@ -107,11 +126,6 @@ Persistent plugin configuration lives in `~/.config/tokentop/config.json`:
 }
 ```
 
-**Path resolution:**
-- `~/` expands to your home directory
-- Relative paths resolve from the config directory (`~/.config/tokentop/`)
-- Absolute paths work as-is
-
 ### Plugins Directory
 
 Drop plugins into `~/.config/tokentop/plugins/` and they're auto-discovered:
@@ -125,7 +139,7 @@ Drop plugins into `~/.config/tokentop/plugins/` and they're auto-discovered:
 └── quick-notification.js    # Single-file plugin
 ```
 
-For directories, the loader checks for entry points in this order:
+For directories, the loader checks entry points in this order:
 1. `package.json` `main` or `exports["."]` field
 2. `src/index.ts`
 3. `index.ts`
@@ -170,7 +184,7 @@ bun add @tokentop/plugin-sdk
 
 ### Minimal Theme Plugin
 
-Themes are the simplest plugin type -- pure data, no async logic:
+Themes are the simplest plugin type — pure data, no async logic:
 
 ```typescript
 // src/index.ts
@@ -179,11 +193,9 @@ import { createThemePlugin } from '@tokentop/plugin-sdk';
 export default createThemePlugin({
   id: 'monokai',
   type: 'theme',
+  name: 'Monokai',
   version: '1.0.0',
-  meta: {
-    name: 'Monokai',
-    description: 'Classic Monokai color scheme',
-  },
+  meta: { description: 'Classic Monokai color scheme' },
   permissions: {},
   theme: {
     colorScheme: 'dark',
@@ -217,7 +229,117 @@ export default createThemePlugin({
 });
 ```
 
-### Test It
+### Minimal Provider Plugin
+
+```typescript
+import {
+  createProviderPlugin,
+  apiKeyCredential,
+  credentialFound,
+  credentialMissing,
+} from '@tokentop/plugin-sdk';
+
+export default createProviderPlugin({
+  id: 'my-provider',
+  type: 'provider',
+  name: 'My Provider',
+  version: '1.0.0',
+  meta: { brandColor: '#3b82f6' },
+  permissions: {
+    network: { enabled: true, allowedDomains: ['api.example.com'] },
+    env: { read: true, vars: ['MY_API_KEY'] },
+  },
+  capabilities: {
+    usageLimits: false,
+    apiRateLimits: false,
+    tokenUsage: false,
+    actualCosts: true,
+  },
+  auth: {
+    async discover(ctx) {
+      const key = ctx.authSources.env.get('MY_API_KEY');
+      return key ? credentialFound(apiKeyCredential(key)) : credentialMissing();
+    },
+    isConfigured: (creds) => !!creds.apiKey,
+  },
+  async fetchUsage(ctx) {
+    const resp = await ctx.http.fetch('https://api.example.com/usage', {
+      headers: { Authorization: `Bearer ${ctx.credentials.apiKey}` },
+    });
+    const data = await resp.json();
+    return {
+      fetchedAt: Date.now(),
+      cost: { total: data.total, currency: 'USD', source: 'api' },
+    };
+  },
+});
+```
+
+### Plugin Configuration
+
+Plugins can declare user-configurable settings via `configSchema`. These render in the Settings UI automatically:
+
+```typescript
+export default createProviderPlugin({
+  // ...
+  configSchema: {
+    apiEndpoint: {
+      type: 'select',
+      label: 'API Region',
+      options: [
+        { value: 'us', label: 'US' },
+        { value: 'eu', label: 'EU' },
+      ],
+      default: 'us',
+    },
+    maxRetries: {
+      type: 'number',
+      label: 'Max Retries',
+      description: 'Number of retry attempts on failure',
+      default: 3,
+      min: 0,
+      max: 10,
+    },
+    verbose: {
+      type: 'boolean',
+      label: 'Verbose Logging',
+      default: false,
+    },
+  },
+  defaultConfig: {
+    apiEndpoint: 'us',
+    maxRetries: 3,
+    verbose: false,
+  },
+  // ...
+});
+```
+
+User values are persisted in `~/.config/tokentop/config.json` under `pluginConfig.<plugin-id>` and passed to your plugin via `ctx.config`.
+
+### Testing
+
+Test plugins without running tokentop using the SDK test harness:
+
+```typescript
+import { createTestContext } from '@tokentop/plugin-sdk/testing';
+import plugin from './src/index.ts';
+
+const ctx = createTestContext({
+  env: { MY_API_KEY: 'test-key' },
+  httpMocks: {
+    'https://api.example.com/usage': {
+      status: 200,
+      body: { total: 4.50 },
+    },
+  },
+});
+
+const creds = await plugin.auth.discover(ctx);
+assert(creds.ok);
+```
+
+### Test It Locally
 
 ```bash
 ttop --plugin ./tokentop-theme-monokai
@@ -232,7 +354,7 @@ Use the `tokentop-{type}-` prefix for community plugins:
   "name": "tokentop-theme-monokai",
   "main": "src/index.ts",
   "peerDependencies": {
-    "@tokentop/plugin-sdk": "^0.1.0"
+    "@tokentop/plugin-sdk": "^1.0.0"
   }
 }
 ```
@@ -241,8 +363,43 @@ Use the `tokentop-{type}-` prefix for community plugins:
 npm publish
 ```
 
+## Key Concepts
+
+### API Version
+
+All plugins must declare `apiVersion: 2`. Core validates this at load time and rejects incompatible plugins. The `createProviderPlugin()` / `createThemePlugin()` / etc. helpers stamp this automatically — you don't need to set it manually.
+
+### Lifecycle Hooks
+
+Plugins can optionally implement lifecycle hooks:
+
+| Hook | When it's called |
+|------|------------------|
+| `initialize(ctx)` | Once after loading — setup connections, allocate resources |
+| `start(ctx)` | Begin active work (polling, watching) |
+| `stop(ctx)` | Pause active work |
+| `destroy(ctx)` | Before unload — cleanup connections, flush buffers |
+| `onConfigChange(config, ctx)` | When user changes plugin settings |
+
+All hooks are optional. Most simple plugins don't need them.
+
+### Error Isolation
+
+Core wraps all plugin method calls with error isolation. If your plugin throws, it won't crash the app. After 5 consecutive failures, the plugin is temporarily disabled (60s cooldown) to prevent cascading errors.
+
+### Plugin Storage
+
+Plugins have access to persistent key-value storage via `ctx.storage`:
+
+```typescript
+await ctx.storage.set('lastSync', Date.now().toString());
+const lastSync = await ctx.storage.get('lastSync');
+```
+
+Storage is namespaced per plugin — you can only access your own data.
+
 ## SDK Reference
 
-For the full API -- provider plugins, credential discovery, testing harness, lifecycle hooks -- see the [Plugin SDK documentation](https://github.com/tokentopapp/plugin-sdk).
+For the full API — all plugin types, credential discovery patterns, notification events, and testing utilities — see the [Plugin SDK documentation](https://github.com/tokentopapp/plugin-sdk).
 
 Install: `bun add @tokentop/plugin-sdk`
