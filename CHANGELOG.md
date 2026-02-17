@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/tokentopapp/tokentop/compare/v0.2.2...v0.2.3) (2026-02-17)
+
+
+### Bug Fixes
+
+* switch npm publish to OIDC trusted publisher with provenance ([ff8732b](https://github.com/tokentopapp/tokentop/commit/ff8732bb121f05f0ebea23a7d93b6b88b4b0b7a8))
+
 ## [0.2.2](https://github.com/tokentopapp/tokentop/compare/v0.2.1...v0.2.2) (2026-02-17)
 
 
