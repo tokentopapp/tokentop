@@ -1,6 +1,6 @@
 {
   "name": "tokentop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Real-time AI token usage monitor - htop for your API costs",
   "author": "Nigel Bazzeghin <nbazzeghin@gmail.com>",
   "license": "MIT",
