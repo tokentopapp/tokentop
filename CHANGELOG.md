@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/tokentopapp/tokentop/compare/v0.2.1...v0.2.2) (2026-02-17)
+
+
+### Bug Fixes
+
+* scope npm package name to @tokentop/tokentop ([c0c3a4b](https://github.com/tokentopapp/tokentop/commit/c0c3a4b607e81b9c1788553b86088adce1ea6b72))
+
 ## [0.2.1](https://github.com/tokentopapp/tokentop/compare/v0.2.0...v0.2.1) (2026-02-17)
 
 
