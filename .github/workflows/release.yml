@@ -59,7 +59,7 @@ jobs:
       - name: Build binary
         run: bun build ./src/cli.ts --compile --target=${{ matrix.target }} --outfile=${{ matrix.name }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}
@@ -76,7 +76,7 @@ jobs:
       sha_linux_x64: ${{ steps.checksums.outputs.sha_linux_x64 }}
       sha_windows_x64: ${{ steps.checksums.outputs.sha_windows_x64 }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
 
