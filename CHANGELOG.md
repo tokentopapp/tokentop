@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/tokentopapp/tokentop/compare/v0.2.0...v0.2.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* drop darwin-x64 build target and use ARM64 runner for linux-arm64 ([3d5078b](https://github.com/tokentopapp/tokentop/commit/3d5078b792a3001f4ce9227f61d8e606571878ee))
+* use ARM64 runner for linux-arm64 binary build ([e89e756](https://github.com/tokentopapp/tokentop/commit/e89e75645c20691ceae4ba43bdfee2f88fbcc194))
+
 ## [0.2.0](https://github.com/tokentopapp/tokentop/compare/v0.1.0...v0.2.0) (2026-02-17)
 
 
