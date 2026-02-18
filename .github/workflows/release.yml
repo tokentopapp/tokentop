@@ -47,7 +47,7 @@ jobs:
             target: bun-windows-x64
             name: ttop-windows-x64.exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -113,7 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     if: "!contains(needs.release-please.outputs.tag_name, '-')"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -137,7 +137,7 @@ jobs:
     if: "!contains(needs.release-please.outputs.tag_name, '-')"
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: tokentopapp/homebrew-tap
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
@@ -198,7 +198,7 @@ jobs:
     if: "!contains(needs.release-please.outputs.tag_name, '-')"
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: tokentopapp/scoop-tokentop
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
