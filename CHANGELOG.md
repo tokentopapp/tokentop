@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/tokentopapp/tokentop/compare/v0.2.2...v0.3.0) (2026-02-21)
+
+
+### Features
+
+* **providers:** enrich provider view with session-derived token and cost data ([1e99f4f](https://github.com/tokentopapp/tokentop/commit/1e99f4f342d50a8a5be28f095f55140105353c8f))
+* **tui:** add provider column to session details drawer ([9991b39](https://github.com/tokentopapp/tokentop/commit/9991b397144f092e69f482a909b1cd28e0c26fd5))
+
+
+### Bug Fixes
+
+* **dashboard:** eliminate scroll jank with ref-based offset and useLayoutEffect ([a6baf11](https://github.com/tokentopapp/tokentop/commit/a6baf1187023010fbf0673826c6378e4c5ce910c))
+* **deps:** update dependency zod to v4 ([#20](https://github.com/tokentopapp/tokentop/issues/20)) ([373ef30](https://github.com/tokentopapp/tokentop/commit/373ef302c467a025bf5f706cd12a4cc083353472))
+* **deps:** update opentui to v0.1.80 ([#9](https://github.com/tokentopapp/tokentop/issues/9)) ([4a78dca](https://github.com/tokentopapp/tokentop/commit/4a78dca8e0f820788a26e410dde4be5b11d8c679))
+* prevent memory leak and process hang on shutdown ([1768a3f](https://github.com/tokentopapp/tokentop/commit/1768a3fa581633083ee679c7671ab7fd18b8a247))
+* **projects:** add scroll tracking with viewport follow and fix Shift+G navigation ([9c3a39b](https://github.com/tokentopapp/tokentop/commit/9c3a39b219c536f8a9490a1edb5117bb3da815aa))
+* **release:** allow feat commits to bump minor version pre-1.0 ([80134df](https://github.com/tokentopapp/tokentop/commit/80134df10b9edfbfd90ddbe9ca176c0b23d4ce6c))
+
 ## [0.2.2](https://github.com/tokentopapp/tokentop/compare/v0.2.1...v0.2.2) (2026-02-17)
 
 
