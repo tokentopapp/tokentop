@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/tokentopapp/tokentop/compare/v0.3.0...v0.4.0) (2026-02-26)
+
+
+### Features
+
+* **plugins:** parallelize loading and fix source priority ([d46b6fb](https://github.com/tokentopapp/tokentop/commit/d46b6fbb171d24471c88eec0f019aaf6b7c04e5e))
+* **settings:** add plugin settings with hierarchical sidebar and description help area ([1ed719d](https://github.com/tokentopapp/tokentop/commit/1ed719dfee00b4a712df9f2d819a7a26eef75b06))
+
+
+### Bug Fixes
+
+* **dashboard:** stabilize list selection and clear scrollbox ghost text ([643de17](https://github.com/tokentopapp/tokentop/commit/643de1756e39dcd719aebea10a851d3b1c7d15c1))
+* **lint:** resolve biome format errors blocking CI ([070b6bc](https://github.com/tokentopapp/tokentop/commit/070b6bc539fd7869c36777451df0f2c661d21d1c))
+* **providers:** support zhipuai-coding-plan auth key ([#33](https://github.com/tokentopapp/tokentop/issues/33)) ([f86ed40](https://github.com/tokentopapp/tokentop/commit/f86ed405cfbca66266b2240ae36e5c40f29fa38e))
+* **storage:** add data retention to prevent unbounded database growth ([ae37da8](https://github.com/tokentopapp/tokentop/commit/ae37da8833862a45eb0acba6d9a3f389f2914dbd))
+* **storage:** decouple session persistence from React lifecycle ([0818789](https://github.com/tokentopapp/tokentop/commit/0818789bff92faa7ea1f846a525129652c7a0db8))
+
 ## [0.3.0](https://github.com/tokentopapp/tokentop/compare/v0.2.2...v0.3.0) (2026-02-21)
 
 
