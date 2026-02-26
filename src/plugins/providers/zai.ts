@@ -64,7 +64,9 @@ export const zaiCodingPlanPlugin: ProviderPlugin = {
   auth: {
     async discover(ctx: PluginContext): Promise<CredentialResult> {
       // 1. Try OpenCode auth (api, wellknown, or oauth)
-      const entry = await ctx.authSources.opencode.getProviderEntry("zai-coding-plan");
+      const entry =
+        (await ctx.authSources.opencode.getProviderEntry("zhipuai-coding-plan")) ||
+        (await ctx.authSources.opencode.getProviderEntry("zai-coding-plan"));
       if (entry) {
         if (entry.type === "api" && entry.key) {
           return { ok: true, credentials: { apiKey: entry.key, source: "opencode" } };
