@@ -1,5 +1,6 @@
 export { anthropicPlugin } from "./anthropic.ts";
 export { antigravityPlugin } from "./antigravity.ts";
+export { chutesPlugin } from "./chutes.ts";
 export { codexPlugin } from "./codex.ts";
 export { geminiPlugin } from "./gemini.ts";
 export { githubCopilotPlugin } from "./github-copilot.ts";
