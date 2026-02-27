@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/tokentopapp/tokentop/compare/v0.4.0...v0.5.0) (2026-02-27)
+
+
+### Features
+
+* **providers:** add support chutes.ai ([#35](https://github.com/tokentopapp/tokentop/issues/35)) ([d1c1583](https://github.com/tokentopapp/tokentop/commit/d1c15831ca11620bd3092dc3c3c982afcc72d152))
+
+
+### Bug Fixes
+
+* **release:** create git tag immediately for draft releases ([516ac17](https://github.com/tokentopapp/tokentop/commit/516ac1734aed3c2242f9b87c783386ac20643508))
+* **security:** use replaceAll for complete URL encoding in update checker ([da5065d](https://github.com/tokentopapp/tokentop/commit/da5065d8207f99a7d2b9c898e464c8b30dfd1d28))
+
 ## [0.4.0](https://github.com/tokentopapp/tokentop/compare/v0.3.0...v0.4.0) (2026-02-26)
 
 
