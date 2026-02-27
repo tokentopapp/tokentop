@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/tokentopapp/tokentop/compare/v0.4.0...v0.5.0) (2026-02-27)
+
+
+### Features
+
+* **providers:** add support chutes.ai ([#35](https://github.com/tokentopapp/tokentop/issues/35)) ([d1c1583](https://github.com/tokentopapp/tokentop/commit/d1c15831ca11620bd3092dc3c3c982afcc72d152))
+
 ## [0.4.0](https://github.com/tokentopapp/tokentop/compare/v0.3.0...v0.4.0) (2026-02-26)
 
 
