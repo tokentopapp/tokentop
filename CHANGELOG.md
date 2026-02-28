@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0](https://github.com/tokentopapp/tokentop/compare/v0.4.0...v0.5.0) (2026-02-28)
+
+
+### Features
+
+* **agents:** add @tokentop/agent-copilot-cli as built-in agent plugin ([62d5e5d](https://github.com/tokentopapp/tokentop/commit/62d5e5da05b563c1c254bf4cccfc145d310fad0c))
+* **agents:** add @tokentop/agent-cursor as built-in agent plugin ([2189746](https://github.com/tokentopapp/tokentop/commit/2189746f0087440dfa96da15393faa95ddc46c49))
+* display estimated/enriched indicator for agent sessions ([8e6105c](https://github.com/tokentopapp/tokentop/commit/8e6105cddb79bd8af6787c698377ee5b27ecf9d0))
+* **providers:** add support chutes.ai ([#35](https://github.com/tokentopapp/tokentop/issues/35)) ([d1c1583](https://github.com/tokentopapp/tokentop/commit/d1c15831ca11620bd3092dc3c3c982afcc72d152))
+
+
+### Bug Fixes
+
+* **activity:** stabilize activity callback to prevent stop/start churn ([70b18fd](https://github.com/tokentopapp/tokentop/commit/70b18fd3fcdebd9e18423fd9e48ac602365babbc))
+* bump CI to Bun 1.3, unpin @types/bun ([291a0f7](https://github.com/tokentopapp/tokentop/commit/291a0f7ec0a03f360441f8366de279cfa1880347))
+* **cli:** use Number.isNaN instead of global isNaN ([056e8a3](https://github.com/tokentopapp/tokentop/commit/056e8a3e2d573a50e5c110a40288b87ab1390b9e))
+* override @types/node to resolve bun-types type conflicts ([9186469](https://github.com/tokentopapp/tokentop/commit/9186469dc256fdffd7988074a6649b11a263e358))
+* pin @types/bun to 1.3.6 to fix Response type regression ([6b556a6](https://github.com/tokentopapp/tokentop/commit/6b556a6e6854d1785b740082acd6c78658af47bd))
+* **plugins:** wire plugin storage to real database ([75188e2](https://github.com/tokentopapp/tokentop/commit/75188e29082d320d02ca04e4ac235d6214b457c4))
+* **release:** create git tag immediately for draft releases ([516ac17](https://github.com/tokentopapp/tokentop/commit/516ac1734aed3c2242f9b87c783386ac20643508))
+* **security:** use replaceAll for complete URL encoding in update checker ([da5065d](https://github.com/tokentopapp/tokentop/commit/da5065d8207f99a7d2b9c898e464c8b30dfd1d28))
+* sort agent plugin imports for biome lint ([f3d16f7](https://github.com/tokentopapp/tokentop/commit/f3d16f79f0127bdfbd2e4204a9d9e6d6102be324))
+
 ## [0.4.0](https://github.com/tokentopapp/tokentop/compare/v0.3.0...v0.4.0) (2026-02-26)
 
 
