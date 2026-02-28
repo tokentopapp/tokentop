@@ -70,6 +70,6 @@
     "bun": ">=1.0.0"
   },
   "overrides": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^25.0.0"
   }
 }
