@@ -19,6 +19,7 @@ Commands:
   demo                    Run with demo data (no real providers)
 
 Options:
+  -t, --theme <id>        Launch with a specific theme (e.g. dracula, nord)
   -r, --refresh <ms>      Refresh interval in milliseconds (default: 60000)
   -p, --plugin <path>     Load a local plugin (file or directory, repeatable)
   -d, --debug             Enable debug mode (verbose logging)
@@ -69,6 +70,7 @@ async function main() {
   let demoSeed: number | undefined;
   let demoPreset: DemoPreset | undefined;
   const cliPlugins: string[] = [];
+  let cliTheme: string | undefined;
 
   // Handle demo subcommand
   if (subcommand === "demo") {
@@ -94,6 +96,15 @@ async function main() {
 
     if (arg === "-d" || arg === "--debug") {
       debug = true;
+    }
+
+    if (arg === "-t" || arg === "--theme") {
+      const themeId = commandArgs[++i];
+      if (!themeId) {
+        console.error("Error: --theme requires a theme ID (e.g. dracula, nord, tokyo-night)");
+        process.exit(1);
+      }
+      cliTheme = themeId;
     }
 
     if (arg === "-p" || arg === "--plugin") {
@@ -158,6 +169,9 @@ async function main() {
   }
   if (demoPreset !== undefined) {
     launchOptions.demoPreset = demoPreset;
+  }
+  if (cliTheme !== undefined) {
+    launchOptions.cliTheme = cliTheme;
   }
   await startTui(launchOptions);
 

@@ -13,6 +13,7 @@ export interface TuiOptions {
   demoSeed?: number;
   demoPreset?: DemoPreset;
   cliPlugins?: string[];
+  cliTheme?: string;
 }
 
 const FORCE_EXIT_GRACE_MS = 1_000;
@@ -44,6 +45,9 @@ export async function startTui(options: TuiOptions = {}) {
   }
   if (options.cliPlugins !== undefined) {
     appOptions.cliPlugins = options.cliPlugins;
+  }
+  if (options.cliTheme !== undefined) {
+    appOptions.cliTheme = options.cliTheme;
   }
 
   root.render(createAppElement(appOptions));

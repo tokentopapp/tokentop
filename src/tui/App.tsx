@@ -48,6 +48,7 @@ interface AppProps {
   demoSeed?: number;
   demoPreset?: DemoPreset;
   cliPlugins?: string[];
+  cliTheme?: string;
 }
 
 type View = "dashboard" | "providers" | "trends" | "projects";
@@ -55,7 +56,7 @@ type View = "dashboard" | "providers" | "trends" | "projects";
 function AppContent() {
   const renderer = useSafeRenderer();
   const colors = useColors();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, cliTheme } = useTheme();
   const { refreshAllProviders, isInitialized, themes } = usePlugins();
   const { info } = useLogs();
   const { toast, showToast, dismissToast } = useToastContext();
@@ -292,8 +293,10 @@ function AppContent() {
 
   useEffect(() => {
     if (themes.length === 0) return;
+    // CLI --theme flag takes priority over config
+    const themeId = cliTheme ?? config.display.theme;
     const resolved = resolveTheme(
-      config.display.theme,
+      themeId,
       config.display.colorScheme,
       themes,
       renderer?.themeMode ?? null,
@@ -301,7 +304,7 @@ function AppContent() {
     if (resolved.id !== theme.id) {
       setTheme(resolved);
     }
-  }, [themes, config.display.theme, config.display.colorScheme, renderer]);
+  }, [themes, cliTheme, config.display.theme, config.display.colorScheme, renderer]);
 
   useEffect(() => {
     if (isInitialized) {
@@ -364,18 +367,19 @@ function AppContent() {
   );
 }
 
-function ConfiguredApp({ cliPlugins }: { cliPlugins?: string[] }) {
+function ConfiguredApp({ cliPlugins, cliTheme }: { cliPlugins?: string[]; cliTheme?: string }) {
   const { config, isLoading } = useConfig();
 
   if (isLoading) {
     return null;
   }
 
-  const initialTheme = builtinThemeList.find((t) => t.id === config.display.theme);
+  const themeId = cliTheme ?? config.display.theme;
+  const initialTheme = builtinThemeList.find((t) => t.id === themeId);
   const themeProps = initialTheme ? { initialTheme } : {};
 
   return (
-    <ThemeProvider {...themeProps}>
+    <ThemeProvider {...themeProps} {...(cliTheme ? { cliTheme } : {})}>
       <TimeWindowProvider defaultWindow={config.display.defaultTimeWindow}>
         <ToastProvider>
           <PluginProvider {...(cliPlugins ? { cliPlugins } : {})}>
@@ -401,6 +405,7 @@ export function App({
   demoSeed,
   demoPreset,
   cliPlugins,
+  cliTheme,
 }: AppProps) {
   const demoProviderProps: { demoMode: boolean; demoSeed?: number; demoPreset?: DemoPreset } = {
     demoMode,
@@ -414,7 +419,7 @@ export function App({
         <InputProvider>
           <StorageProvider>
             <ConfigProvider>
-              <ConfiguredApp {...(cliPlugins ? { cliPlugins } : {})} />
+              <ConfiguredApp {...(cliPlugins ? { cliPlugins } : {})} {...(cliTheme ? { cliTheme } : {})} />
             </ConfigProvider>
           </StorageProvider>
         </InputProvider>

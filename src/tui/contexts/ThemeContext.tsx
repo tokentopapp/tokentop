@@ -16,6 +16,7 @@ interface ThemeContextValue {
   setTheme: (theme: ThemePlugin) => void;
   previewTheme: ThemePlugin | null;
   setPreviewTheme: (theme: ThemePlugin | null) => void;
+  cliTheme: string | undefined;
 }
 
 const defaultComponents: ThemeComponents = {
@@ -29,10 +30,11 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 interface ThemeProviderProps {
   initialTheme?: ThemePlugin;
+  cliTheme?: string;
   children: ReactNode;
 }
 
-export function ThemeProvider({ initialTheme, children }: ThemeProviderProps) {
+export function ThemeProvider({ initialTheme, cliTheme, children }: ThemeProviderProps) {
   const [theme, setTheme] = useState<ThemePlugin>(initialTheme ?? tokyoNightTheme);
   const [previewTheme, setPreviewTheme] = useState<ThemePlugin | null>(null);
 
@@ -46,6 +48,7 @@ export function ThemeProvider({ initialTheme, children }: ThemeProviderProps) {
     setTheme,
     previewTheme,
     setPreviewTheme,
+    cliTheme,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
