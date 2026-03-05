@@ -7,6 +7,8 @@ import { useAnimatedValue } from "../hooks/useAnimatedValue.ts";
 import { applyEntranceFade, useEntranceAnimation } from "../hooks/useEntranceAnimation.ts";
 import { useExitAnimation } from "../hooks/useExitAnimation.ts";
 import { interpolateColor, useValueFlash } from "../hooks/useValueFlash.ts";
+import type { SortDirection, SortField } from "../types/sort.ts";
+import { getSortDirectionIndicator, getSortFieldLabel } from "../types/sort.ts";
 
 interface SessionsTableProps {
   sessions: AgentSessionAggregate[];
@@ -17,6 +19,8 @@ interface SessionsTableProps {
   focusedPanel: "sessions" | "sidebar" | "limits";
   windowLabel: string;
   getProviderColor: (id: string) => string;
+  sortField: SortField;
+  sortDirection: SortDirection;
 }
 
 function extractRepoName(projectPath: string | null): string {
@@ -355,6 +359,8 @@ export const SessionsTable = forwardRef(function SessionsTable(
     focusedPanel,
     windowLabel,
     getProviderColor,
+    sortField,
+    sortDirection,
   }: SessionsTableProps,
   ref: Ref<ScrollBoxRenderable>,
 ) {
@@ -401,6 +407,11 @@ export const SessionsTable = forwardRef(function SessionsTable(
   const selectedSession = sessions[selectedRow] ?? null;
   const inspector = selectedSession ? getInspectorData(selectedSession) : null;
 
+  // Sort indicator helpers for column headers
+  const sortIndicator = (field: string) =>
+    sortField === field ? (sortDirection === "desc" ? "▼" : "▲") : " ";
+  const sortColor = (field: string) => (sortField === field ? colors.primary : colors.textMuted);
+
   return (
     <box
       flexDirection="column"
@@ -418,9 +429,15 @@ export const SessionsTable = forwardRef(function SessionsTable(
         justifyContent="space-between"
         overflow="hidden"
       >
-        <text height={1} fg={colors.textMuted}>
-          SESSIONS{filterQuery ? ` [${isFiltering ? "Filter: " : ""}${filterQuery}]` : ""}
-          {isLoading ? " ⟳" : "  "}
+        <text height={1}>
+          <span fg={colors.textMuted}>SESSIONS </span>
+          <span fg={colors.primary}>
+            Sort: {getSortFieldLabel(sortField)} {getSortDirectionIndicator(sortDirection)}
+          </span>
+          <span fg={colors.textMuted}>
+            {filterQuery ? ` [${isFiltering ? "Filter: " : ""}${filterQuery}]` : ""}
+            {isLoading ? " ⟳" : "  "}
+          </span>
         </text>
         <text height={1} fg={colors.textMuted}>
           [{windowLabel}] {sessions.length} sessions
@@ -435,36 +452,36 @@ export const SessionsTable = forwardRef(function SessionsTable(
           <text width={8} height={1} fg={colors.textMuted}>
             ID{" "}
           </text>
-          <text width={12} height={1} fg={colors.textMuted}>
-            AGENT{" "}
+          <text width={12} height={1} fg={sortColor("agent")}>
+            AGENT{sortIndicator("agent")}
           </text>
           <text width={18} height={1} fg={colors.textMuted}>
             MODEL{" "}
           </text>
-          <text width={5} height={1} fg={colors.textMuted}>
-            {" "}
+          <text width={5} height={1} fg={sortColor("requests")}>
+            {sortIndicator("requests")}
             REQ{" "}
           </text>
-          <text width={14} height={1} fg={colors.textMuted}>
-            {" "}
+          <text width={14} height={1} fg={sortColor("tokens")}>
+            {sortIndicator("tokens")}
             TOKENS{" "}
           </text>
-          <text width={8} height={1} fg={colors.textMuted}>
-            {" "}
+          <text width={8} height={1} fg={sortColor("cost")}>
+            {sortIndicator("cost")}
             COST{" "}
           </text>
-          <text width={14} height={1} fg={colors.textMuted}>
-            PROJECT{" "}
+          <text width={14} height={1} fg={sortColor("project")}>
+            PROJECT{sortIndicator("project")}
           </text>
           <text flexGrow={1} height={1} fg={colors.textMuted}>
             NAME
           </text>
-          <text width={6} height={1} fg={colors.textMuted}>
-            {" "}
+          <text width={6} height={1} fg={sortColor("duration")}>
+            {sortIndicator("duration")}
             DUR{" "}
           </text>
-          <text width={5} height={1} fg={colors.textMuted}>
-            LAST{" "}
+          <text width={5} height={1} fg={sortColor("time")}>
+            LAST{sortIndicator("time")}
           </text>
           <text width={2} height={1} fg={colors.textMuted}>
             {" "}
@@ -475,24 +492,30 @@ export const SessionsTable = forwardRef(function SessionsTable(
           <text width={2} height={1} fg={colors.textMuted}>
             {" "}
           </text>
-          <text width={9} height={1} fg={colors.textMuted}>
-            AGENT{" "}
+          <text width={9} height={1} fg={sortColor("agent")}>
+            AGENT{sortIndicator("agent")}
           </text>
           <text width={isTight ? 13 : 16} height={1} fg={colors.textMuted}>
             {isTight ? "MODEL        " : "MODEL           "}
           </text>
-          <text width={isTight ? 9 : 14} height={1} fg={colors.textMuted}>
-            {isTight ? "  TOKENS " : " TOKENS        "}
+          <text width={isTight ? 9 : 14} height={1} fg={sortColor("tokens")}>
+            {isTight
+              ? `${sortIndicator("tokens")} TOKENS `
+              : `${sortIndicator("tokens")}TOKENS        `}
           </text>
-          <text width={7} height={1} fg={colors.textMuted}>
-            {" "}
+          <text width={7} height={1} fg={sortColor("cost")}>
+            {sortIndicator("cost")}
             COST{" "}
           </text>
-          <text flexGrow={1} height={1} fg={colors.textMuted}>
-            {nameMaxWidth >= 7 ? "PROJECT" : nameMaxWidth >= 4 ? "PROJ" : ""}
+          <text flexGrow={1} height={1} fg={sortColor("project")}>
+            {nameMaxWidth >= 7
+              ? `PROJECT${sortIndicator("project")}`
+              : nameMaxWidth >= 4
+                ? "PROJ"
+                : ""}
           </text>
-          <text width={5} height={1} fg={colors.textMuted}>
-            LAST{" "}
+          <text width={5} height={1} fg={sortColor("time")}>
+            LAST{sortIndicator("time")}
           </text>
           <text width={2} height={1} fg={colors.textMuted}>
             {" "}

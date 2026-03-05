@@ -26,7 +26,9 @@ export function parseCurrencyInput(input: string): number | null {
   } else if (hasComma) {
     const parts = normalized.split(",");
     // 3 digits after comma = thousands separator (1,234), otherwise decimal (10,50)
-    if (parts.length === 2 && parts[1]!.length === 3 && parts[0]!.length > 0) {
+    const afterComma = parts[1]?.length ?? 0;
+    const beforeComma = parts[0]?.length ?? 0;
+    if (parts.length === 2 && afterComma === 3 && beforeComma > 0) {
       normalized = normalized.replace(",", "");
     } else {
       normalized = normalized.replace(",", ".");
@@ -35,7 +37,7 @@ export function parseCurrencyInput(input: string): number | null {
 
   const parsed = parseFloat(normalized);
 
-  if (isNaN(parsed) || !isFinite(parsed)) {
+  if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
     return null;
   }
 

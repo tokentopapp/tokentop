@@ -488,7 +488,7 @@ export class DemoSimulator {
         limitReached: newPercent > 95,
         limits: {
           primary: {
-            ...existing.limits!.primary!,
+            ...existing.limits?.primary,
             usedPercent: newPercent,
           },
         },

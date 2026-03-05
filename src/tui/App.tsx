@@ -419,7 +419,10 @@ export function App({
         <InputProvider>
           <StorageProvider>
             <ConfigProvider>
-              <ConfiguredApp {...(cliPlugins ? { cliPlugins } : {})} {...(cliTheme ? { cliTheme } : {})} />
+              <ConfiguredApp
+                {...(cliPlugins ? { cliPlugins } : {})}
+                {...(cliTheme ? { cliTheme } : {})}
+              />
             </ConfigProvider>
           </StorageProvider>
         </InputProvider>

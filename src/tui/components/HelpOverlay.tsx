@@ -59,7 +59,7 @@ export function HelpOverlay() {
           <text width={10} height={1} fg={colors.textMuted}>
             s
           </text>
-          <text height={1}>Sort</text>
+          <text height={1}>Sort menu</text>
         </box>
         <box flexDirection="row" height={1}>
           <text width={10} height={1} fg={colors.textMuted}>
