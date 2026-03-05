@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { animationTick } from "./useAnimationTick.ts";
 
 export type EasingFunction = (t: number) => number;
 
@@ -14,6 +15,7 @@ export interface UseAnimatedValueOptions {
   durationMs?: number;
   easing?: keyof typeof easings | EasingFunction;
   precision?: number;
+  /** @deprecated Ignored — animations now use the global 30 Hz tick. */
   frameRate?: number;
 }
 
@@ -21,57 +23,58 @@ export function useAnimatedValue(
   targetValue: number,
   options: UseAnimatedValueOptions = {},
 ): number {
-  const { durationMs = 300, easing = "easeOutQuad", precision = 2, frameRate = 60 } = options;
+  const { durationMs = 300, easing = "easeOutQuad", precision = 2 } = options;
 
   const [displayValue, setDisplayValue] = useState(targetValue);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const displayRef = useRef(targetValue);
   const startValueRef = useRef(targetValue);
-  const startTimeRef = useRef<number>(Date.now());
+  const startTimeRef = useRef(0);
   const targetRef = useRef(targetValue);
+  const unsubRef = useRef<(() => void) | null>(null);
 
   const easingFn = typeof easing === "function" ? easing : easings[easing];
-  const frameInterval = Math.round(1000 / frameRate);
 
   useEffect(() => {
-    if (targetRef.current === targetValue && displayValue === targetValue) {
+    // Already at target — nothing to animate
+    if (targetRef.current === targetValue && displayRef.current === targetValue) {
       return;
     }
 
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-    }
+    // Clean up any existing subscription
+    unsubRef.current?.();
 
-    startValueRef.current = displayValue;
+    // Set up animation from current display value to new target
+    startValueRef.current = displayRef.current;
     startTimeRef.current = Date.now();
     targetRef.current = targetValue;
 
-    intervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTimeRef.current;
+    // Subscribe to global tick — auto-starts the shared timer
+    unsubRef.current = animationTick.subscribe((now) => {
+      const elapsed = now - startTimeRef.current;
       const progress = Math.min(elapsed / durationMs, 1);
       const easedProgress = easingFn(progress);
-
       const startVal = startValueRef.current;
-      const currentValue = startVal + (targetRef.current - startVal) * easedProgress;
-      const roundedValue = Number(currentValue.toFixed(precision));
+      const target = targetRef.current;
+      const currentValue = startVal + (target - startVal) * easedProgress;
+      const rounded = Number(currentValue.toFixed(precision));
 
-      setDisplayValue(roundedValue);
+      displayRef.current = rounded;
+      setDisplayValue(rounded);
 
       if (progress >= 1) {
-        if (intervalRef.current !== null) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        setDisplayValue(targetRef.current);
+        displayRef.current = target;
+        setDisplayValue(target);
+        // Unsubscribe — if no other animations are active, the global timer stops
+        unsubRef.current?.();
+        unsubRef.current = null;
       }
-    }, frameInterval);
+    });
 
     return () => {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      unsubRef.current?.();
+      unsubRef.current = null;
     };
-  }, [targetValue, durationMs, easingFn, precision, frameInterval, displayValue]);
+  }, [targetValue, durationMs, easingFn, precision]);
 
   return displayValue;
 }

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { animationTick } from "./useAnimationTick.ts";
 
 /**
  * Options for the usePulse hook.
@@ -39,7 +40,7 @@ function parseHexColor(hex: string): [number, number, number] | null {
   const g = parseInt(expandedHex.slice(2, 4), 16);
   const b = parseInt(expandedHex.slice(4, 6), 16);
 
-  if (isNaN(r) || isNaN(g) || isNaN(b)) {
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
     return null;
   }
 
@@ -104,6 +105,9 @@ export function getPulseColor(
  * Returns the current step in the pulse cycle, which can be used
  * with getPulseColor to create smooth color transitions.
  *
+ * Subscribes to the global animation tick when enabled and unsubscribes
+ * when disabled, so the global timer stops when no pulses are active.
+ *
  * @param options - Configuration options for the pulse animation
  * @returns Current step in the pulse cycle (0 to steps-1), or 0 when disabled
  *
@@ -120,6 +124,7 @@ export function getPulseColor(
 export function usePulse(options: UsePulseOptions): number {
   const { enabled, intervalMs = 200, steps = 12 } = options;
   const [step, setStep] = useState(0);
+  const lastAdvanceRef = useRef(Date.now());
 
   useEffect(() => {
     if (!enabled) {
@@ -127,11 +132,12 @@ export function usePulse(options: UsePulseOptions): number {
       return;
     }
 
-    const interval = setInterval(() => {
-      setStep((prev) => (prev + 1) % steps);
-    }, intervalMs);
-
-    return () => clearInterval(interval);
+    return animationTick.subscribe((now) => {
+      if (now - lastAdvanceRef.current >= intervalMs) {
+        lastAdvanceRef.current = now;
+        setStep((prev) => (prev + 1) % steps);
+      }
+    });
   }, [enabled, intervalMs, steps]);
 
   return step;

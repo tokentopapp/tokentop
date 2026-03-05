@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useColors } from "../contexts/ThemeContext.tsx";
+import { animationTick } from "../hooks/useAnimationTick.ts";
 import { interpolateColor } from "../hooks/useValueFlash.ts";
 
 const SHIMMER_INTERVAL = 50;
@@ -12,13 +13,15 @@ interface ShimmerSegment {
 
 function useShimmer(length: number, baseColor: string, highlightColor: string): ShimmerSegment[] {
   const [phase, setPhase] = useState(0);
+  const lastAdvanceRef = useRef(Date.now());
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPhase((p) => (p + 1) % (length + SHIMMER_WAVE_LENGTH));
-    }, SHIMMER_INTERVAL);
-
-    return () => clearInterval(interval);
+    return animationTick.subscribe((now) => {
+      if (now - lastAdvanceRef.current >= SHIMMER_INTERVAL) {
+        lastAdvanceRef.current = now;
+        setPhase((p) => (p + 1) % (length + SHIMMER_WAVE_LENGTH));
+      }
+    });
   }, [length]);
 
   const segments: ShimmerSegment[] = [];

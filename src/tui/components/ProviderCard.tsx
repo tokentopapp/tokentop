@@ -1,10 +1,11 @@
 import type { BoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import type { ProviderUsageData } from "@tokentop/plugin-sdk";
-import { forwardRef, useCallback, useEffect, useState } from "react";
+import { forwardRef, useCallback } from "react";
 import { useColors } from "../contexts/ThemeContext.tsx";
+import { usePulse } from "../hooks/usePulse.ts";
 import { SkeletonProviderContent } from "./Skeleton.tsx";
-import { useSpinner } from "./Spinner.tsx";
+import { Spinner } from "./Spinner.tsx";
 import { UsageGauge } from "./UsageGauge.tsx";
 
 interface CompactGaugeProps {
@@ -60,9 +61,11 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(
     const colors = useColors();
     const { width: termWidth } = useTerminalDimensions();
     const providerColor = color ?? colors.primary;
-    const spinnerFrame = useSpinner();
-
-    const [pulseStep, setPulseStep] = useState(0);
+    const pulseStep = usePulse({
+      enabled: usage?.limitReached ?? false,
+      intervalMs: 150,
+      steps: 12,
+    });
 
     const rawItems = usage?.limits?.items;
     const hasItems = rawItems && rawItems.length > 0;
@@ -77,19 +80,6 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(
     const visibleItems =
       sortedItems.length > maxVisibleGauges ? sortedItems.slice(0, maxVisibleGauges) : sortedItems;
     const useCompactMode = visibleItems.length > 3;
-
-    useEffect(() => {
-      if (!usage?.limitReached) {
-        setPulseStep(0);
-        return;
-      }
-
-      const timer = setInterval(() => {
-        setPulseStep((p) => (p + 1) % 12);
-      }, 150);
-
-      return () => clearInterval(timer);
-    }, [usage?.limitReached]);
 
     const handleClick = useCallback(() => {
       if (onFocus) {
@@ -154,7 +144,11 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(
               <strong>{name}</strong>
             </span>
           </text>
-          <text fg={statusColor}>{configured && loading ? spinnerFrame : statusIcon}</text>
+          {configured && loading ? (
+            <Spinner color={statusColor} />
+          ) : (
+            <text fg={statusColor}>{statusIcon}</text>
+          )}
         </box>
 
         {!configured && <text fg={colors.textSubtle}>Not configured</text>}
