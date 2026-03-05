@@ -153,7 +153,7 @@ class PluginLifecycleManager {
     const ctx = this.makeCtx(entry);
     await safeInvoke(pluginId, "onConfigChange", () =>
       runInPluginGuard(pluginId, plugin.permissions, () =>
-        Promise.resolve(plugin.onConfigChange!(newConfig, ctx)),
+        Promise.resolve(plugin.onConfigChange?.(newConfig, ctx)),
       ),
     );
   }

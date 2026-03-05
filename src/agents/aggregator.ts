@@ -107,7 +107,8 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
       sessionMap.set(row.sessionId, newSession);
     }
 
-    const session = sessionMap.get(row.sessionId)!;
+    const session = sessionMap.get(row.sessionId);
+    if (!session) continue;
 
     session.timestamps.push(row.timestamp);
     if (row.sessionName && !session.sessionName) {

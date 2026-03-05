@@ -258,6 +258,47 @@ Display estimated costs with `~` indicator: `~$0.0234`
 - PR required for all changes
 - CI must pass before merge
 
+### Green CI (MANDATORY)
+
+**Every PR must have green CI before requesting review.** This means:
+
+- `bun run typecheck` passes (zero errors)
+- `bun run lint` passes (zero **errors**; warnings are advisory and do not block CI)
+- `bun test` passes
+
+If CI fails on your PR, fix it — even if the failures are pre-existing on `main`. The goal is that every PR leaves CI in a passing state.
+
+**Pre-commit gate (MANDATORY):** Run `bun run typecheck && bun run lint && bun test` locally and confirm zero errors **before every commit**, not just before pushing. Do not commit code that fails any of these checks.
+
+### GitHub Templates (MANDATORY)
+
+This project has GitHub templates that **MUST** be used for all PRs and issues. Never free-form a PR body or issue body — always read the template first and fill in every section.
+
+#### Pull Requests
+
+Template: `.github/PULL_REQUEST_TEMPLATE.md`
+
+When creating a PR with `gh pr create`, read the template file first and structure the `--body` to match it exactly. Required sections:
+
+- **Summary** — 1-2 sentence description
+- **Changes** — Bullet list of key changes
+- **Type** — Check exactly one: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
+- **Related issues** — `Closes #N` or `Relates to #N`
+- **Testing** — Check which verification was done (`bun test`, `bun run typecheck`, manual)
+- **Screenshots / captures** — For UI changes, include frame captures or note how to verify visually
+
+#### Bug Reports
+
+Template: `.github/ISSUE_TEMPLATE/bug_report.yml`
+
+Required fields: description, steps to reproduce, expected behavior, tokentop version, OS. Optional: screenshots, terminal emulator, Bun version, coding agents, logs, additional context.
+
+#### Feature Requests
+
+Template: `.github/ISSUE_TEMPLATE/feature_request.yml`
+
+Required fields: problem statement, proposed solution, area (dropdown), scope (dropdown). Optional: alternatives considered, additional context.
+
 ## TUI Debugging System
 
 **IMPORTANT FOR AI AGENTS**: When the user reports visual bugs, animation issues, or says "something looks wrong" - IMMEDIATELY check for captured frames. The user captures frames to show you exactly what they see.

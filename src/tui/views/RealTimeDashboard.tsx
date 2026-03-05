@@ -7,6 +7,7 @@ import { KpiStrip } from "../components/KpiStrip.tsx";
 import { ProviderLimitsPanel } from "../components/ProviderLimitsPanel.tsx";
 import { SessionsTable } from "../components/SessionsTable.tsx";
 import { type DriverDimension, getSidebarMode, SmartSidebar } from "../components/SmartSidebar.tsx";
+import { SortOverlay } from "../components/SortOverlay.tsx";
 import { useAgentSessions } from "../contexts/AgentSessionContext.tsx";
 import { useConfig } from "../contexts/ConfigContext.tsx";
 import { useDashboardRuntime } from "../contexts/DashboardRuntimeContext.tsx";
@@ -15,6 +16,8 @@ import { usePlugins } from "../contexts/PluginContext.tsx";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { useTimeWindow } from "../contexts/TimeWindowContext.tsx";
 import { useDashboardKeyboard } from "../hooks/useDashboardKeyboard.ts";
+import type { SortDirection, SortField } from "../types/sort.ts";
+import { SORT_FIELDS } from "../types/sort.ts";
 import { getProviderColor } from "../utils/providerColor.ts";
 
 export function RealTimeDashboard() {
@@ -29,6 +32,23 @@ export function RealTimeDashboard() {
   const sidebarMode = getSidebarMode(terminalWidth);
   const showLargeHeader = terminalHeight >= 35;
   const showProviderLimitsPanel = terminalHeight >= 24;
+
+  // SessionsTable hides REQ, NAME, DUR, TIME columns in narrow mode (<140).
+  // Filter sort fields to match visible columns.
+  const SESSIONS_WIDE_THRESHOLD = 140;
+  const NARROW_HIDDEN_FIELDS: ReadonlySet<SortField> = new Set([
+    "requests",
+    "name",
+    "duration",
+    "time",
+  ]);
+  const visibleSortFields = useMemo(
+    () =>
+      terminalWidth >= SESSIONS_WIDE_THRESHOLD
+        ? SORT_FIELDS
+        : SORT_FIELDS.filter((f) => !NARROW_HIDDEN_FIELDS.has(f.id)),
+    [terminalWidth],
+  );
 
   // Visible-row count for scroll tracking — every non-session-data line must be counted.
   const visibleRows = (() => {
@@ -61,7 +81,9 @@ export function RealTimeDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(config.display.sidebarCollapsed);
   const [filterQuery, setFilterQuery] = useState("");
   const [isFiltering, setIsFiltering] = useState(false);
-  const [sortField, setSortField] = useState<"cost" | "tokens" | "time">("cost");
+  const [sortField, setSortField] = useState<SortField>("time");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [showSortOverlay, setShowSortOverlay] = useState(false);
   const [pendingG, setPendingG] = useState(false);
   const scrollOffsetRef = useRef(0);
   const selectedSessionIdRef = useRef<string | null>(null);
@@ -184,14 +206,53 @@ export function RealTimeDashboard() {
       const bActive = b.status === "active" ? 1 : 0;
       if (bActive !== aActive) return bActive - aActive;
 
-      if (sortField === "cost") return (b.totalCostUsd ?? 0) - (a.totalCostUsd ?? 0);
-      if (sortField === "tokens")
-        return b.totals.input + b.totals.output - (a.totals.input + a.totals.output);
-      return b.lastActivityAt - a.lastActivityAt;
+      let cmp = 0;
+      switch (sortField) {
+        case "cost":
+          cmp = (a.totalCostUsd ?? 0) - (b.totalCostUsd ?? 0);
+          break;
+        case "tokens":
+          cmp = a.totals.input + a.totals.output - (b.totals.input + b.totals.output);
+          break;
+        case "time":
+          cmp = a.lastActivityAt - b.lastActivityAt;
+          break;
+        case "requests":
+          cmp = a.requestCount - b.requestCount;
+          break;
+        case "duration": {
+          const aDur = (a.endedAt ?? Date.now()) - a.startedAt;
+          const bDur = (b.endedAt ?? Date.now()) - b.startedAt;
+          cmp = aDur - bDur;
+          break;
+        }
+        case "project": {
+          const aProj = a.projectPath?.split("/").pop() ?? "";
+          const bProj = b.projectPath?.split("/").pop() ?? "";
+          cmp = aProj.localeCompare(bProj);
+          break;
+        }
+        case "agent":
+          cmp = a.agentName.localeCompare(b.agentName);
+          break;
+        case "model": {
+          const aModel = a.streams[0]?.modelId ?? "";
+          const bModel = b.streams[0]?.modelId ?? "";
+          cmp = aModel.localeCompare(bModel);
+          break;
+        }
+        case "name": {
+          const aName = a.sessionName ?? "";
+          const bName = b.sessionName ?? "";
+          cmp = aName.localeCompare(bName);
+          break;
+        }
+      }
+      return sortDirection === "desc" ? -cmp : cmp;
     });
 
     return result;
-  }, [baseFilteredSessions, activeDriverFilter, driverDimension, sortField]);
+  }, [baseFilteredSessions, activeDriverFilter, driverDimension, sortField, sortDirection]);
 
   // Stabilize selection across re-sorts: track selected session by ID
   // so the highlight follows the same session when live data causes reordering.
@@ -261,6 +322,7 @@ export function RealTimeDashboard() {
       filterQuery,
       isFiltering,
       sortField,
+      sortDirection,
       pendingG,
       scrollOffset: scrollOffsetRef.current,
       limitSelectedIndex,
@@ -269,6 +331,7 @@ export function RealTimeDashboard() {
       selectedDriverIndex,
       activeDriverFilter,
       sidebarMode,
+      showSortOverlay,
     },
     actions: {
       setShowHelp,
@@ -280,12 +343,14 @@ export function RealTimeDashboard() {
       setFilterQuery,
       setIsFiltering,
       setSortField,
+      setSortDirection,
       setPendingG,
       setScrollOffset,
       setLimitSelectedIndex,
       setDriverDimension,
       setSelectedDriverIndex,
       setActiveDriverFilter,
+      setShowSortOverlay,
     },
     processedSessions,
   });
@@ -348,6 +413,19 @@ export function RealTimeDashboard() {
   return (
     <box flexDirection="column" flexGrow={1} padding={1} gap={1} overflow="hidden">
       {showHelp && <HelpOverlay />}
+      {showSortOverlay && (
+        <SortOverlay
+          fields={visibleSortFields}
+          currentField={sortField}
+          currentDirection={sortDirection}
+          onSelect={(field, direction) => {
+            setSortField(() => field);
+            setSortDirection(() => direction);
+            setShowSortOverlay(false);
+          }}
+          onClose={() => setShowSortOverlay(false)}
+        />
+      )}
 
       <KpiStrip
         totalCost={windowedKpis.cost}
@@ -416,6 +494,8 @@ export function RealTimeDashboard() {
           focusedPanel={focusedPanel}
           windowLabel={windowLabel}
           getProviderColor={providerColorOf}
+          sortField={sortField}
+          sortDirection={sortDirection}
         />
 
         {!effectiveSidebarCollapsed && (
@@ -440,7 +520,7 @@ export function RealTimeDashboard() {
               : activeDriverFilter
                 ? `Filter: ${activeDriverFilter}  Esc clear`
                 : focusedPanel === "sessions"
-                  ? "/ filter  ↑↓ navigate  Enter details  s sort  l limits  Tab next  ⇧Tab prev"
+                  ? "/ filter  ↑↓ navigate  Enter details  s sort  l limits  Tab next"
                   : focusedPanel === "limits"
                     ? "←→ select provider  Tab next  ⇧Tab prev  Esc back"
                     : focusedPanel === "sidebar"

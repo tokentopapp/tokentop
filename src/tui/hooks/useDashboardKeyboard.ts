@@ -7,6 +7,7 @@ import { useAgentSessions } from "../contexts/AgentSessionContext.tsx";
 import { useInputFocus } from "../contexts/InputContext.tsx";
 import { useTimeWindow } from "../contexts/TimeWindowContext.tsx";
 import { useToastContext } from "../contexts/ToastContext.tsx";
+import type { SortDirection, SortField } from "../types/sort.ts";
 
 function formatSessionSummary(session: AgentSessionAggregate): string {
   const effectiveTokens = session.totals.input + session.totals.output;
@@ -54,7 +55,9 @@ interface DashboardKeyboardState {
   sidebarCollapsed: boolean;
   filterQuery: string;
   isFiltering: boolean;
-  sortField: "cost" | "tokens" | "time";
+  sortField: SortField;
+  sortDirection: SortDirection;
+  showSortOverlay: boolean;
   pendingG: boolean;
   scrollOffset: number;
   limitSelectedIndex: number;
@@ -76,13 +79,15 @@ interface DashboardKeyboardActions {
   setSidebarCollapsed: (fn: (prev: boolean) => boolean) => void;
   setFilterQuery: (fn: (prev: string) => string) => void;
   setIsFiltering: (val: boolean) => void;
-  setSortField: (fn: (prev: "cost" | "tokens" | "time") => "cost" | "tokens" | "time") => void;
+  setSortField: (fn: (prev: SortField) => SortField) => void;
+  setSortDirection: (fn: (prev: SortDirection) => SortDirection) => void;
   setPendingG: (val: boolean) => void;
   setScrollOffset: (val: number) => void;
   setLimitSelectedIndex: (fn: (prev: number) => number) => void;
   setDriverDimension: (fn: (prev: DriverDimension) => DriverDimension) => void;
   setSelectedDriverIndex: (fn: (prev: number) => number) => void;
   setActiveDriverFilter: (val: string | null) => void;
+  setShowSortOverlay: (val: boolean) => void;
 }
 
 interface UseDashboardKeyboardProps {
@@ -115,7 +120,7 @@ export function useDashboardKeyboard({
 
   useEffect(() => {
     isFilteringRef.current = state.isFiltering;
-    modalOpenRef.current = state.showHelp || state.showSessionDrawer;
+    modalOpenRef.current = state.showHelp || state.showSessionDrawer || state.showSortOverlay;
     pendingGRef.current = state.pendingG;
     sessionsRef.current = processedSessions;
     focusedPanelRef.current = state.focusedPanel;
@@ -129,6 +134,7 @@ export function useDashboardKeyboard({
     state.isFiltering,
     state.showHelp,
     state.showSessionDrawer,
+    state.showSortOverlay,
     state.pendingG,
     processedSessions,
     state.focusedPanel,
@@ -242,8 +248,9 @@ export function useDashboardKeyboard({
       return;
     }
 
+    // Open sort overlay menu
     if (key.name === "s") {
-      actions.setSortField((curr) => (curr === "cost" ? "tokens" : "cost"));
+      actions.setShowSortOverlay(true);
       return;
     }
 

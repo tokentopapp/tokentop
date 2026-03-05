@@ -4,16 +4,21 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import type React from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AgentSessionAggregate } from "../../agents/types.ts";
+import { SortOverlay } from "../components/SortOverlay.tsx";
 import { useAgentSessions } from "../contexts/AgentSessionContext.tsx";
 import { useInputFocus } from "../contexts/InputContext.tsx";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { useTimeWindow } from "../contexts/TimeWindowContext.tsx";
+import type { ProjectSortField } from "../types/projectSort.ts";
+import { getProjectSortFieldLabel, PROJECT_SORT_FIELDS } from "../types/projectSort.ts";
+import type { SortDirection } from "../types/sort.ts";
+import { getSortDirectionIndicator } from "../types/sort.ts";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type SortField = "cost" | "tokens" | "sessions" | "cache" | "cpr" | "activity";
+// ProjectSortField imported from ../types/projectSort.ts
 
 interface ModelStats {
   modelId: string;
@@ -264,50 +269,48 @@ function aggregateProjects(
 }
 
 // ---------------------------------------------------------------------------
-// Sort fields cycle
+// Sorting
 // ---------------------------------------------------------------------------
-
-const SORT_FIELDS: SortField[] = ["cost", "tokens", "sessions", "cache", "cpr", "activity"];
-
-const SORT_LABELS: Record<SortField, string> = {
-  cost: "COST",
-  tokens: "TOKENS",
-  sessions: "SESSIONS",
-  cache: "CACHE",
-  cpr: "$/REQ",
-  activity: "ACTIVITY",
-};
 
 function sortProjects(
   projects: ProjectStats[],
-  field: SortField,
-  _totalCost?: number,
+  field: ProjectSortField,
+  direction: SortDirection,
 ): ProjectStats[] {
   return [...projects].sort((a, b) => {
+    let cmp = 0;
     switch (field) {
       case "cost":
-        return b.cost - a.cost;
+        cmp = a.cost - b.cost;
+        break;
       case "tokens":
-        return b.tokens - a.tokens;
+        cmp = a.tokens - b.tokens;
+        break;
       case "sessions":
-        return b.sessionCount - a.sessionCount;
+        cmp = a.sessionCount - b.sessionCount;
+        break;
       case "cache": {
         const cacheA =
           a.inputTokens + a.cacheRead > 0 ? a.cacheRead / (a.inputTokens + a.cacheRead) : 0;
         const cacheB =
           b.inputTokens + b.cacheRead > 0 ? b.cacheRead / (b.inputTokens + b.cacheRead) : 0;
-        return cacheB - cacheA;
+        cmp = cacheA - cacheB;
+        break;
       }
       case "cpr": {
         const cprA = a.requestCount > 0 ? a.cost / a.requestCount : 0;
         const cprB = b.requestCount > 0 ? b.cost / b.requestCount : 0;
-        return cprB - cprA;
+        cmp = cprA - cprB;
+        break;
       }
       case "activity":
-        return b.activeSessions - a.activeSessions;
-      default:
-        return 0;
+        cmp = a.activeSessions - b.activeSessions;
+        break;
+      case "project":
+        cmp = a.name.localeCompare(b.name);
+        break;
     }
+    return direction === "desc" ? -cmp : cmp;
   });
 }
 
@@ -360,7 +363,8 @@ interface AggregateHeaderProps {
   projectCount: number;
   sessionCount: number;
   windowLabel: string;
-  sortField: SortField;
+  sortField: ProjectSortField;
+  sortDirection: SortDirection;
 }
 
 function AggregateHeader({
@@ -370,6 +374,7 @@ function AggregateHeader({
   sessionCount,
   windowLabel,
   sortField,
+  sortDirection,
 }: AggregateHeaderProps) {
   const colors = useColors();
   const avgPerProject = projectCount > 0 ? totalCost / projectCount : 0;
@@ -393,7 +398,10 @@ function AggregateHeader({
         <span fg={colors.text}>{formatCost(avgPerProject)}</span>
       </text>
       <text height={1} fg={colors.textMuted}>
-        [{windowLabel}] Sort: <span fg={colors.primary}>{SORT_LABELS[sortField]}</span>
+        [{windowLabel}] Sort:{" "}
+        <span fg={colors.primary}>
+          {getProjectSortFieldLabel(sortField)} {getSortDirectionIndicator(sortDirection)}
+        </span>
       </text>
     </box>
   );
@@ -1195,7 +1203,9 @@ export function ProjectsView() {
   const { setInputFocused } = useInputFocus();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [sortField, setSortField] = useState<SortField>("cost");
+  const [sortField, setSortField] = useState<ProjectSortField>("cost");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [showSortOverlay, setShowSortOverlay] = useState(false);
   const [showInsights, setShowInsights] = useState(termHeight >= 35);
   const [drawerProject, setDrawerProject] = useState<ProjectStats | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
@@ -1246,12 +1256,43 @@ export function ProjectsView() {
 
   // Sort
   const sortedProjects = useMemo(
-    () => sortProjects(filteredProjects, sortField, totalCost),
-    [filteredProjects, sortField, totalCost],
+    () => sortProjects(filteredProjects, sortField, sortDirection),
+    [filteredProjects, sortField, sortDirection],
   );
 
   // Visible columns
   const visibleColumns: ColumnSpec[] = useMemo(() => getVisibleColumns(termWidth), [termWidth]);
+
+  // Map column keys → sort field IDs so we can hide sort fields for hidden columns.
+  // "tokens" has no dedicated column but is always available (related to cost data).
+  const COLUMN_TO_SORT_FIELD: Record<string, ProjectSortField> = {
+    project: "project",
+    cost: "cost",
+    sess: "sessions",
+    cache: "cache",
+    cpr: "cpr",
+    activity: "activity",
+  };
+
+  // Sort indicator helpers for column headers (matches SessionsTable pattern)
+  const sortIndicatorForCol = (colKey: string) => {
+    const field = COLUMN_TO_SORT_FIELD[colKey];
+    return field && sortField === field ? (sortDirection === "desc" ? "▼" : "▲") : " ";
+  };
+  const sortColorForCol = (colKey: string) => {
+    const field = COLUMN_TO_SORT_FIELD[colKey];
+    return field && sortField === field ? colors.primary : colors.textMuted;
+  };
+  const visibleSortFields = useMemo(() => {
+    const visibleFieldIds = new Set<ProjectSortField>(
+      visibleColumns
+        .map((c) => COLUMN_TO_SORT_FIELD[c.key])
+        .filter((id): id is ProjectSortField => id !== undefined),
+    );
+    // Always include tokens — no dedicated column but universally useful
+    visibleFieldIds.add("tokens");
+    return PROJECT_SORT_FIELDS.filter((f) => visibleFieldIds.has(f.id));
+  }, [visibleColumns]);
 
   // Stabilize selection across re-sorts: track selected project by path
   // so the highlight follows the same project when live data causes reordering.
@@ -1336,6 +1377,9 @@ export function ProjectsView() {
   useKeyboard(
     useCallback(
       (key: { name: string; shift?: boolean; ctrl?: boolean }) => {
+        // Sort overlay is open — let SortOverlay handle keys
+        if (showSortOverlay) return;
+
         // Drawer open: only Esc closes
         if (drawerProject) {
           if (key.name === "escape") {
@@ -1355,18 +1399,17 @@ export function ProjectsView() {
           return;
         }
 
+        // Open sort overlay menu
+        if (key.name === "s") {
+          setShowSortOverlay(true);
+          return;
+        }
+
         // Navigation
         if (key.name === "down" || key.name === "j") {
           setSelectedIndex((prev: number) => Math.min(prev + 1, sortedProjects.length - 1));
         } else if (key.name === "up" || key.name === "k") {
           setSelectedIndex((prev: number) => Math.max(prev - 1, 0));
-        }
-        // Sort cycling
-        else if (key.name === "s") {
-          setSortField((prev: SortField) => {
-            const idx = SORT_FIELDS.indexOf(prev);
-            return SORT_FIELDS[(idx + 1) % SORT_FIELDS.length]!;
-          });
         }
         // Time window
         else if (key.name === "t") {
@@ -1401,7 +1444,15 @@ export function ProjectsView() {
           scrollOffsetRef.current = 0;
         }
       },
-      [drawerProject, isFiltering, sortedProjects, selectedIndex, cycleWindow, filterQuery],
+      [
+        drawerProject,
+        isFiltering,
+        sortedProjects,
+        selectedIndex,
+        cycleWindow,
+        filterQuery,
+        showSortOverlay,
+      ],
     ),
   );
 
@@ -1441,6 +1492,20 @@ export function ProjectsView() {
         />
       )}
 
+      {/* Sort overlay */}
+      {showSortOverlay && (
+        <SortOverlay
+          fields={visibleSortFields}
+          currentField={sortField}
+          currentDirection={sortDirection}
+          onSelect={(field, direction) => {
+            setSortField(() => field);
+            setSortDirection(() => direction);
+            setShowSortOverlay(false);
+          }}
+          onClose={() => setShowSortOverlay(false)}
+        />
+      )}
       {/* Aggregate header */}
       <AggregateHeader
         totalCost={visibleCost}
@@ -1449,6 +1514,7 @@ export function ProjectsView() {
         sessionCount={visibleSessions}
         windowLabel={windowLabel}
         sortField={sortField}
+        sortDirection={sortDirection}
       />
 
       {/* Column headers */}
@@ -1458,8 +1524,8 @@ export function ProjectsView() {
         </text>
         {visibleColumns.map((col: ColumnSpec) => (
           <box key={col.key} marginRight={1}>
-            <text width={col.width} height={1} fg={colors.textMuted}>
-              {padRight(col.label, col.width)}
+            <text width={col.width} height={1} fg={sortColorForCol(col.key)}>
+              {padRight(`${col.label}${sortIndicatorForCol(col.key)}`, col.width)}
             </text>
           </box>
         ))}
