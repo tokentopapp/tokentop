@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { animationTick } from "./useAnimationTick.ts";
 
 export interface UseEntranceAnimationOptions {
   durationMs?: number;
+  /** @deprecated Ignored — animations now use the global 30 Hz tick. */
   fps?: number;
 }
 
@@ -11,26 +13,30 @@ export interface UseEntranceAnimationOptions {
  * Use this to fade in new items in a list.
  */
 export function useEntranceAnimation(options: UseEntranceAnimationOptions = {}): number {
-  const { durationMs = 400, fps = 30 } = options;
+  const { durationMs = 400 } = options;
   const mountTime = useRef(Date.now());
   const [intensity, setIntensity] = useState(0);
+  const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    const intervalMs = 1000 / fps;
-
-    const tick = () => {
-      const elapsed = Date.now() - mountTime.current;
+    unsubRef.current = animationTick.subscribe((now) => {
+      const elapsed = now - mountTime.current;
       const progress = Math.min(1, elapsed / durationMs);
       const eased = 1 - (1 - progress) ** 2;
       setIntensity(eased);
 
-      if (progress < 1) {
-        setTimeout(tick, intervalMs);
+      if (progress >= 1) {
+        setIntensity(1);
+        unsubRef.current?.();
+        unsubRef.current = null;
       }
-    };
+    });
 
-    tick();
-  }, [durationMs, fps]);
+    return () => {
+      unsubRef.current?.();
+      unsubRef.current = null;
+    };
+  }, [durationMs]);
 
   return intensity;
 }

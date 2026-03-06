@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { animationTick } from "./useAnimationTick.ts";
 
 export interface UseValueFlashOptions {
   durationMs?: number;
@@ -20,12 +21,9 @@ export function useValueFlash(
 
   const prevValueRef = useRef<number>(value);
   const [isFlashing, setIsFlashing] = useState(false);
-  const [step, setStep] = useState(0);
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const steps = 18;
-  const stepDuration = durationMs / steps;
+  const [intensity, setIntensity] = useState(0);
+  const flashStartRef = useRef(0);
+  const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const prevValue = prevValueRef.current;
@@ -34,45 +32,39 @@ export function useValueFlash(
     const shouldFlash = increaseOnly ? delta > threshold : Math.abs(delta) > threshold;
 
     if (shouldFlash && prevValue !== value) {
-      if (flashTimeoutRef.current) {
-        clearTimeout(flashTimeoutRef.current);
-      }
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current);
-      }
+      // Clean up any existing subscription
+      unsubRef.current?.();
 
+      flashStartRef.current = Date.now();
       setIsFlashing(true);
-      setStep(0);
 
-      let currentStep = 0;
-      animationIntervalRef.current = setInterval(() => {
-        currentStep++;
-        if (currentStep >= steps) {
-          if (animationIntervalRef.current) {
-            clearInterval(animationIntervalRef.current);
-            animationIntervalRef.current = null;
-          }
+      // Subscribe to global tick
+      unsubRef.current = animationTick.subscribe((now) => {
+        const elapsed = now - flashStartRef.current;
+        const progress = elapsed / durationMs;
+
+        if (progress >= 1) {
           setIsFlashing(false);
-          setStep(0);
+          setIntensity(0);
+          unsubRef.current?.();
+          unsubRef.current = null;
         } else {
-          setStep(currentStep);
+          const currentIntensity = Math.sin(progress * Math.PI);
+          setIntensity(currentIntensity);
         }
-      }, stepDuration);
+      });
     }
 
     prevValueRef.current = value;
 
     return () => {
-      if (flashTimeoutRef.current) {
-        clearTimeout(flashTimeoutRef.current);
-      }
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current);
-      }
+      unsubRef.current?.();
+      unsubRef.current = null;
     };
-  }, [value, durationMs, increaseOnly, threshold, steps, stepDuration]);
+  }, [value, durationMs, increaseOnly, threshold]);
 
-  const intensity = isFlashing ? Math.sin((step / steps) * Math.PI) : 0;
+  // step is kept for backward API compatibility
+  const step = isFlashing ? Math.round(intensity * 9) : 0;
 
   return { isFlashing, intensity, step };
 }

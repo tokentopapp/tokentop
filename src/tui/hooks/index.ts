@@ -6,6 +6,7 @@ export {
   useAnimatedTokens,
   useAnimatedValue,
 } from "./useAnimatedValue.ts";
+export { animationTick, useAnimationTick } from "./useAnimationTick.ts";
 export type { DashboardDeltas, UseDashboardStateResult } from "./useDashboardState.ts";
 export { useDashboardState } from "./useDashboardState.ts";
 export type { ActivityDebugData, ActivityState, UseActivityRateResult } from "./useEmaActivity.ts";
