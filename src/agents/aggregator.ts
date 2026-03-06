@@ -85,6 +85,7 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
       timestamps: number[];
       sessionUpdatedAt?: number;
       streamMap: Map<string, StreamAccumulator>;
+      hasEstimated: boolean;
     }
   >();
 
@@ -97,9 +98,11 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
         timestamps: number[];
         sessionUpdatedAt?: number;
         streamMap: Map<string, StreamAccumulator>;
+        hasEstimated: boolean;
       } = {
         timestamps: [],
         streamMap: new Map(),
+        hasEstimated: false,
       };
       if (row.sessionName) newSession.sessionName = row.sessionName;
       if (row.projectPath) newSession.projectPath = row.projectPath;
@@ -146,6 +149,9 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     if (row.timestamp >= startOfDay) stream.windowed.dayTokens += msgTokens;
     if (row.timestamp >= startOfWeek) stream.windowed.weekTokens += msgTokens;
     if (row.timestamp >= startOfMonth) stream.windowed.monthTokens += msgTokens;
+    if ((row.metadata?.isEstimated as boolean) === true) {
+      session.hasEstimated = true;
+    }
   }
 
   const results: AgentSessionAggregate[] = [];
@@ -191,10 +197,8 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     if (session.sessionName) aggregate.sessionName = session.sessionName;
     if (session.projectPath) aggregate.projectPath = session.projectPath;
 
-    // Propagate metadata — session is estimated if any row is estimated
-    const sessionRows = rows.filter((r) => r.sessionId === sessionId);
-    const anyEstimated = sessionRows.some((r) => (r.metadata?.isEstimated as boolean) === true);
-    if (anyEstimated) {
+    // Propagate metadata — collected during the first pass (O(1) per session)
+    if (session.hasEstimated) {
       aggregate.metadata = { isEstimated: true };
     }
     results.push(aggregate);
