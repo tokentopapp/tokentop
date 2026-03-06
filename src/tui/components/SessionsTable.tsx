@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import { forwardRef, memo, type Ref, useCallback, useRef } from "react";
+import { forwardRef, memo, type Ref, useCallback, useEffect, useRef } from "react";
 import type { AgentSessionAggregate } from "../../agents/types.ts";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { useAnimatedValue } from "../hooks/useAnimatedValue.ts";
@@ -9,6 +9,9 @@ import { useExitAnimation } from "../hooks/useExitAnimation.ts";
 import { interpolateColor, useValueFlash } from "../hooks/useValueFlash.ts";
 import type { SortDirection, SortField } from "../types/sort.ts";
 import { getSortDirectionIndicator, getSortFieldLabel } from "../types/sort.ts";
+
+/** Number of rows above/below the viewport to keep as full SessionRow components. */
+const VIRTUALIZATION_BUFFER = 3;
 
 interface SessionsTableProps {
   sessions: AgentSessionAggregate[];
@@ -21,6 +24,10 @@ interface SessionsTableProps {
   getProviderColor: (id: string) => string;
   sortField: SortField;
   sortDirection: SortDirection;
+  /** Number of session rows visible in the viewport. */
+  visibleRows: number;
+  /** Current scroll offset (row index at the top of the viewport). */
+  scrollOffset: number;
 }
 
 function extractRepoName(projectPath: string | null): string {
@@ -361,6 +368,8 @@ export const SessionsTable = forwardRef(function SessionsTable(
     getProviderColor,
     sortField,
     sortDirection,
+    visibleRows,
+    scrollOffset,
   }: SessionsTableProps,
   ref: Ref<ScrollBoxRenderable>,
 ) {
@@ -403,9 +412,24 @@ export const SessionsTable = forwardRef(function SessionsTable(
   const bulkCountRef = useRef(0);
   if (isBulkChange) bulkCountRef.current++;
 
+  // --- Virtualization: determine which rows get full SessionRow vs placeholder ---
+  const totalRows = animatedSessions.length;
+  const clampedOffset = Math.min(scrollOffset, Math.max(0, totalRows - 1));
+  const startIdx = Math.max(0, clampedOffset - VIRTUALIZATION_BUFFER);
+  const endIdx = Math.min(totalRows, clampedOffset + visibleRows + VIRTUALIZATION_BUFFER);
+
+  // Track known session IDs so we can skip entrance animation for
+  // rows revealed by scrolling (vs genuinely new sessions).
+  const prevSessionIdsRef = useRef<Set<string>>(new Set());
+
   let activeIndex = 0;
   const selectedSession = sessions[selectedRow] ?? null;
   const inspector = selectedSession ? getInspectorData(selectedSession) : null;
+
+  // Update known session IDs after render so next render can detect new vs scroll-revealed.
+  useEffect(() => {
+    prevSessionIdsRef.current = new Set(sessions.map((s) => s.sessionId));
+  }, [sessions]);
 
   // Sort indicator helpers for column headers
   const sortIndicator = (field: string) =>
@@ -532,8 +556,17 @@ export const SessionsTable = forwardRef(function SessionsTable(
               </text>
             </box>
           )}
-          {animatedSessions.map((entry) => {
+          {animatedSessions.map((entry, i) => {
             const isSelectedRow = !entry.isExiting && activeIndex++ === selectedRow;
+            const isInViewport = i >= startIdx && i < endIdx;
+
+            // Off-screen, non-exiting rows: lightweight placeholder (no hooks)
+            if (!isInViewport && !entry.isExiting) {
+              return <box key={entry.item.sessionId} height={1} />;
+            }
+
+            // Visible rows and exiting rows: full SessionRow with hooks
+            const isKnownSession = prevSessionIdsRef.current.has(entry.item.sessionId);
             return (
               <SessionRow
                 key={entry.item.sessionId}
@@ -544,7 +577,7 @@ export const SessionsTable = forwardRef(function SessionsTable(
                 getProviderColor={getProviderColor}
                 isExiting={entry.isExiting}
                 exitIntensity={entry.exitIntensity}
-                skipEntrance={isBulkChange}
+                skipEntrance={isBulkChange || isKnownSession}
                 terminalWidth={terminalWidth}
               />
             );

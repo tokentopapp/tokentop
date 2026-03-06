@@ -86,9 +86,11 @@ export function RealTimeDashboard() {
   const [showSortOverlay, setShowSortOverlay] = useState(false);
   const [pendingG, setPendingG] = useState(false);
   const scrollOffsetRef = useRef(0);
+  const [scrollOffset, _setScrollOffsetState] = useState(0);
   const selectedSessionIdRef = useRef<string | null>(null);
   const setScrollOffset = useCallback((val: number) => {
     scrollOffsetRef.current = val;
+    _setScrollOffsetState(val);
     sessionsScrollboxRef.current?.scrollTo(val);
   }, []);
   const [limitSelectedIndex, setLimitSelectedIndex] = useState(0);
@@ -299,9 +301,12 @@ export function RealTimeDashboard() {
       newOffset = selectedRow - visibleRows + 1;
     }
 
-    scrollOffsetRef.current = newOffset;
-    sessionsScrollboxRef.current.scrollTo(newOffset);
-  }, [selectedRow, processedSessions.length, visibleRows]);
+    if (newOffset !== scrollOffsetRef.current) {
+      setScrollOffset(newOffset);
+    } else {
+      sessionsScrollboxRef.current.scrollTo(newOffset);
+    }
+  }, [selectedRow, processedSessions.length, visibleRows, setScrollOffset]);
 
   const openSessionDrawer = useCallback(() => {
     const session = processedSessions[selectedRow];
@@ -324,7 +329,7 @@ export function RealTimeDashboard() {
       sortField,
       sortDirection,
       pendingG,
-      scrollOffset: scrollOffsetRef.current,
+      scrollOffset,
       limitSelectedIndex,
       providerCount: configuredProviders.length,
       driverDimension,
@@ -351,6 +356,9 @@ export function RealTimeDashboard() {
       setSelectedDriverIndex,
       setActiveDriverFilter,
       setShowSortOverlay,
+      clearSelectedSessionId: () => {
+        selectedSessionIdRef.current = null;
+      },
     },
     processedSessions,
   });
@@ -496,6 +504,8 @@ export function RealTimeDashboard() {
           getProviderColor={providerColorOf}
           sortField={sortField}
           sortDirection={sortDirection}
+          visibleRows={visibleRows}
+          scrollOffset={scrollOffset}
         />
 
         {!effectiveSidebarCollapsed && (

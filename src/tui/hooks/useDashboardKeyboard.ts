@@ -88,6 +88,7 @@ interface DashboardKeyboardActions {
   setSelectedDriverIndex: (fn: (prev: number) => number) => void;
   setActiveDriverFilter: (val: string | null) => void;
   setShowSortOverlay: (val: boolean) => void;
+  clearSelectedSessionId: () => void;
 }
 
 interface UseDashboardKeyboardProps {
@@ -278,27 +279,39 @@ export function useDashboardKeyboard({
     if (focusedPanelRef.current === "sessions") {
       const sessions = sessionsRef.current;
       if (key.name === "down" || key.name === "j") {
+        pendingGRef.current = false;
         actions.setPendingG(false);
         actions.setSelectedRow((curr) => Math.min(curr + 1, sessions.length - 1));
       } else if (key.name === "up" || key.name === "k") {
+        pendingGRef.current = false;
         actions.setPendingG(false);
         actions.setSelectedRow((curr) => Math.max(curr - 1, 0));
       } else if (key.shift && key.name === "g") {
+        pendingGRef.current = false;
         actions.setPendingG(false);
+        actions.clearSelectedSessionId();
         actions.setSelectedRow(() => sessions.length - 1);
       } else if (key.name === "g") {
         if (pendingGRef.current) {
+          actions.clearSelectedSessionId();
           actions.setSelectedRow(() => 0);
           actions.setScrollOffset(0);
+          pendingGRef.current = false;
           actions.setPendingG(false);
         } else {
+          pendingGRef.current = true;
           actions.setPendingG(true);
-          setTimeout(() => actions.setPendingG(false), 500);
+          setTimeout(() => {
+            pendingGRef.current = false;
+            actions.setPendingG(false);
+          }, 500);
         }
       } else if (key.name === "return" && sessions.length > 0) {
+        pendingGRef.current = false;
         actions.setPendingG(false);
         actions.openSessionDrawer();
       } else {
+        pendingGRef.current = false;
         actions.setPendingG(false);
       }
     }
