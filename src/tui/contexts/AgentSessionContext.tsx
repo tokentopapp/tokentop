@@ -21,6 +21,10 @@ import { useLogs } from "./LogContext.tsx";
 import { usePlugins } from "./PluginContext.tsx";
 import { useTimeWindow } from "./TimeWindowContext.tsx";
 
+/** Polling interval when at least one session is active. */
+const ACTIVE_INTERVAL_MS = 3_000;
+/** Polling interval when all sessions are idle/historical. */
+const IDLE_INTERVAL_MS = 15_000;
 interface AgentSessionContextValue {
   sessions: AgentSessionAggregate[];
   agents: AgentInfo[];
@@ -35,14 +39,24 @@ const AgentSessionContext = createContext<AgentSessionContextValue | null>(null)
 interface AgentSessionProviderProps {
   children: ReactNode;
   autoRefresh?: boolean;
-  refreshInterval?: number;
 }
 
-export function AgentSessionProvider({
-  children,
-  autoRefresh = false,
-  refreshInterval = 30000,
-}: AgentSessionProviderProps) {
+/**
+ * Compute a lightweight fingerprint of session state.
+ * If the fingerprint hasn't changed, we skip setSessions() to avoid
+ * unnecessary React re-renders of the entire session list.
+ */
+function computeSessionFingerprint(sessions: AgentSessionAggregate[]): string {
+  // Build a compact string from the fields that actually affect the UI.
+  // This is intentionally simple — no crypto hashing needed, just string comparison.
+  let fp = `${sessions.length}:`;
+  for (const s of sessions) {
+    fp += `${s.sessionId},${s.status},${s.lastActivityAt},${s.totals.input},${s.totals.output},${s.totalCostUsd ?? 0},${s.requestCount};`;
+  }
+  return fp;
+}
+
+export function AgentSessionProvider({ children, autoRefresh = false }: AgentSessionProviderProps) {
   const [sessions, setSessions] = useState<AgentSessionAggregate[]>([]);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,6 +68,7 @@ export function AgentSessionProvider({
   const { windowMs } = useTimeWindow();
   const hasBackfilled = useRef(false);
   const isRefreshingRef = useRef(false);
+  const lastFingerprintRef = useRef<string>("");
 
   const discoverAgents = useCallback(async (): Promise<AgentInfo[]> => {
     const agentPlugins = pluginRegistry.getAll("agent");
@@ -182,6 +197,20 @@ export function AgentSessionProvider({
 
         pricedSessions.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 
+        // --- Change detection: skip React update if nothing changed ---
+        const newFingerprint = computeSessionFingerprint(pricedSessions);
+        const changed = newFingerprint !== lastFingerprintRef.current;
+        lastFingerprintRef.current = newFingerprint;
+
+        if (!changed) {
+          debug(
+            "Session refresh: no changes detected, skipping render",
+            undefined,
+            "agent-sessions",
+          );
+          return;
+        }
+
         // Persist to storage — the persistence service handles throttling
         // internally (fingerprint gate + 5-minute per-session throttle).
         // Safe to call every tick; state lives on globalThis, survives HMR.
@@ -260,18 +289,32 @@ export function AgentSessionProvider({
   useEffect(() => {
     if (!autoRefresh) return;
 
-    debug(`Setting up session refresh interval: ${refreshInterval}ms`, undefined, "agent-sessions");
+    // Adaptive polling: poll faster when sessions are active, slower when idle.
+    // The interval is re-evaluated after each tick based on current session state.
+    let timerId: ReturnType<typeof setTimeout> | null = null;
 
-    const intervalId = setInterval(() => {
-      debug("Interval tick - refreshing sessions", undefined, "agent-sessions");
-      refreshSessionsRef.current();
-    }, refreshInterval);
+    const scheduleNext = () => {
+      const hasActive = sessions.some((s) => s.status === "active");
+      const interval = hasActive ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
+
+      timerId = setTimeout(() => {
+        debug(
+          `Adaptive tick (${hasActive ? "active" : "idle"}, ${interval}ms)`,
+          undefined,
+          "agent-sessions",
+        );
+        refreshSessionsRef.current().then(scheduleNext);
+      }, interval);
+    };
+
+    scheduleNext();
 
     return () => {
-      debug("Clearing session refresh interval", undefined, "agent-sessions");
-      clearInterval(intervalId);
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
     };
-  }, [autoRefresh, refreshInterval, debug]);
+  }, [autoRefresh, sessions, debug]);
 
   const value: AgentSessionContextValue = {
     sessions,
