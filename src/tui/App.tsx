@@ -384,7 +384,7 @@ function ConfiguredApp({ cliPlugins, cliTheme }: { cliPlugins?: string[]; cliThe
         <ToastProvider>
           <PluginProvider {...(cliPlugins ? { cliPlugins } : {})}>
             <RealTimeActivityProvider>
-              <AgentSessionProvider autoRefresh={true} refreshInterval={1000}>
+              <AgentSessionProvider autoRefresh={true}>
                 <DashboardRuntimeProvider>
                   <DrawerProvider>
                     <AppContent />
