@@ -16,6 +16,7 @@ Real-time terminal monitoring of LLM token usage and spending across providers a
 [![GitHub release](https://img.shields.io/github/v/release/tokentopapp/tokentop?style=flat-square)](https://github.com/tokentopapp/tokentop/releases)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-f9f1e1?style=flat-square&logo=bun&logoColor=black)](https://bun.sh)
+![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2Ftokentopapp%2Ftokentop&labelColor=%23697689&countColor=%23ba68c8&style=flat-square)
 
 [Features](#features) · [Install](#installation) · [Quick Start](#quick-start) · [Keyboard Shortcuts](#keyboard-shortcuts) · [Configuration](#configuration) · [Plugins](#plugin-system)
 
@@ -38,7 +39,7 @@ That's tokentop.
 
 ## Demo
 
-https://github.com/user-attachments/assets/0b0225c7-a137-454b-9b29-c858cdcbd86c
+<https://github.com/user-attachments/assets/0b0225c7-a137-454b-9b29-c858cdcbd86c>
 
 ## Features
 
