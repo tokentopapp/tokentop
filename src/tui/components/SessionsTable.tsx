@@ -397,6 +397,7 @@ export const SessionsTable = forwardRef(function SessionsTable(
   const { items: animatedSessions, isBulkChange } = useExitAnimation(sessions, {
     durationMs: 500,
     getKey: getSessionKey,
+    bulkThreshold: 50,
   });
 
   // Track bulk changes to force scrollbox remount (clears ghost text)
