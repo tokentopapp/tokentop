@@ -2,6 +2,7 @@ import type { BoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import type { ProviderUsageData } from "@tokentop/plugin-sdk";
 import { forwardRef, useCallback } from "react";
+import { classifyProviderError, getErrorCategoryDisplay } from "@/utils/error-category.ts";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { usePulse } from "../hooks/usePulse.ts";
 import { SkeletonProviderContent } from "./Skeleton.tsx";
@@ -87,17 +88,28 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(
       }
     }, [onFocus]);
 
+    const errorCategory = usage?.error ? classifyProviderError(usage.error) : undefined;
+    const errorDisplay = errorCategory ? getErrorCategoryDisplay(errorCategory) : undefined;
+
     const statusColor = !configured
       ? colors.textSubtle
       : loading
         ? colors.info
         : usage?.error
-          ? colors.error
+          ? errorDisplay?.isWarning
+            ? colors.warning
+            : colors.error
           : usage?.limitReached
             ? colors.warning
             : colors.success;
 
-    const statusIcon = !configured ? "○" : usage?.error ? "✗" : usage?.limitReached ? "!" : "●";
+    const statusIcon = !configured
+      ? "○"
+      : usage?.error
+        ? (errorDisplay?.icon ?? "✗")
+        : usage?.limitReached
+          ? "!"
+          : "●";
 
     const isInitialLoad = loading && !usage;
 
@@ -156,7 +168,17 @@ export const ProviderCard = forwardRef<BoxRenderable, ProviderCardProps>(
         {configured && isInitialLoad && <SkeletonProviderContent />}
 
         {configured && !isInitialLoad && usage?.error && (
-          <text fg={colors.error}>{usage.error}</text>
+          <box flexDirection="column" gap={0}>
+            <text fg={errorDisplay?.isWarning ? colors.warning : colors.error}>
+              <span>
+                <bold>{errorDisplay?.label ?? "ERR"}</bold>
+              </span>
+              <span fg={colors.textMuted}> — </span>
+              <span fg={errorDisplay?.isWarning ? colors.warning : colors.error}>
+                {usage.error}
+              </span>
+            </text>
+          </box>
         )}
 
         {configured && !isInitialLoad && usage && !usage.error && (

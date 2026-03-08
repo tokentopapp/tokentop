@@ -2,6 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { notificationBus } from "@/plugins/notification-bus.ts";
+import { classifyProviderError } from "@/utils/error-category.ts";
 import { HelpOverlay } from "../components/HelpOverlay.tsx";
 import { KpiStrip } from "../components/KpiStrip.tsx";
 import { ProviderLimitsPanel } from "../components/ProviderLimitsPanel.tsx";
@@ -460,7 +461,9 @@ export function RealTimeDashboard() {
           name: p.plugin.name,
           usedPercent: getMaxUsedPercent(p),
           color: providerColorOf(p.plugin.id),
-          ...(p.usage?.error ? { error: p.usage.error } : {}),
+          ...(p.usage?.error
+            ? { error: p.usage.error, errorCategory: classifyProviderError(p.usage.error) }
+            : {}),
         }))}
         focused={focusedPanel === "limits"}
         selectedIndex={limitSelectedIndex}
