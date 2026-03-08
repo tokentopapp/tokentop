@@ -49,6 +49,15 @@ interface CostsResponse {
   has_more: boolean;
 }
 
+class RateLimitError extends Error {
+  readonly retryAfterMs: number;
+  constructor(retryAfterMs: number) {
+    super(`Rate limited. Retry after ${retryAfterMs / 1000}s.`);
+    this.name = "RateLimitError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 export const openaiApiPlugin: ProviderPlugin = {
   apiVersion: 2,
   id: "openai-api",
@@ -145,6 +154,21 @@ export const openaiApiPlugin: ProviderPlugin = {
         fetchCosts(http, adminKey, oneDayAgo),
       ]);
 
+      // If either helper hit a 429, surface rate-limit info immediately
+      for (const settled of [usageResult, costsResult]) {
+        if (settled.status === "rejected" && settled.reason instanceof RateLimitError) {
+          log.warn("Rate limited by OpenAI API", { retryAfterMs: settled.reason.retryAfterMs });
+          return {
+            planType: "API",
+            allowed: true,
+            fetchedAt: Date.now(),
+            error: settled.reason.message,
+            rateLimited: true,
+            retryAfterMs: settled.reason.retryAfterMs,
+          };
+        }
+      }
+
       const result: ProviderUsageData = {
         planType: "API",
         allowed: true,
@@ -208,6 +232,16 @@ export const openaiApiPlugin: ProviderPlugin = {
 
       return result;
     } catch (err) {
+      if (err instanceof RateLimitError) {
+        return {
+          planType: "API",
+          allowed: true,
+          fetchedAt: Date.now(),
+          error: err.message,
+          rateLimited: true,
+          retryAfterMs: err.retryAfterMs,
+        };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       log.error("OpenAI fetch error", { error: msg });
 
@@ -236,6 +270,15 @@ async function fetchCompletionsUsage(
   });
 
   if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const parsedRetryAfter = retryAfterHeader
+        ? Number.parseInt(retryAfterHeader, 10)
+        : Number.NaN;
+      const retrySec =
+        Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0 ? parsedRetryAfter : 300;
+      throw new RateLimitError(retrySec * 1000);
+    }
     if (response.status === 403) {
       return null;
     }
@@ -260,6 +303,15 @@ async function fetchCosts(
   });
 
   if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const parsedRetryAfter = retryAfterHeader
+        ? Number.parseInt(retryAfterHeader, 10)
+        : Number.NaN;
+      const retrySec =
+        Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0 ? parsedRetryAfter : 300;
+      throw new RateLimitError(retrySec * 1000);
+    }
     if (response.status === 403) {
       return null;
     }
