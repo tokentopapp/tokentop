@@ -202,3 +202,33 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
 
   return results.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 }
+
+/**
+ * Deduplicate aggregates that share the same sessionId.
+ *
+ * This happens when multiple agent plugins scan the same directory
+ * (e.g. both agent-antigravity and agent-gemini-cli read ~/.gemini/tmp/).
+ * For each duplicate sessionId, the richer aggregate is kept:
+ *  1. More streams (more provider/model pairs)
+ *  2. If tied, more requests
+ *  3. If still tied, the first one encountered
+ */
+export function deduplicateAggregates(
+  aggregates: AgentSessionAggregate[],
+): AgentSessionAggregate[] {
+  const deduped = new Map<string, AgentSessionAggregate>();
+  for (const agg of aggregates) {
+    const existing = deduped.get(agg.sessionId);
+    if (!existing) {
+      deduped.set(agg.sessionId, agg);
+      continue;
+    }
+    if (
+      agg.streams.length > existing.streams.length ||
+      (agg.streams.length === existing.streams.length && agg.requestCount > existing.requestCount)
+    ) {
+      deduped.set(agg.sessionId, agg);
+    }
+  }
+  return Array.from(deduped.values());
+}

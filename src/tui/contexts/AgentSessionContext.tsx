@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { aggregateSessionUsage } from "@/agents/aggregator.ts";
+import { aggregateSessionUsage, deduplicateAggregates } from "@/agents/aggregator.ts";
 import { priceSessions } from "@/agents/costing.ts";
 import type { AgentId, AgentInfo, AgentSessionAggregate } from "@/agents/types.ts";
 import { createPluginContext } from "@/plugins/plugin-context-factory.ts";
@@ -193,30 +193,8 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
           }
         }
 
-        // --- Deduplicate sessions claimed by multiple agents ---
-        // When two agent plugins scan the same directory (e.g. both
-        // agent-antigravity and agent-gemini-cli read ~/.gemini/tmp/),
-        // they produce separate aggregates for the same sessionId.
-        // Keep the richer aggregate (more streams, then more requests).
-        const deduped = new Map<string, AgentSessionAggregate>();
-        for (const agg of allAggregates) {
-          const existing = deduped.get(agg.sessionId);
-          if (!existing) {
-            deduped.set(agg.sessionId, agg);
-            continue;
-          }
-          // Prefer the aggregate with more streams (richer data),
-          // then more requests, then keep the earlier one.
-          if (
-            agg.streams.length > existing.streams.length ||
-            (agg.streams.length === existing.streams.length &&
-              agg.requestCount > existing.requestCount)
-          ) {
-            deduped.set(agg.sessionId, agg);
-          }
-        }
-
-        const dedupedAggregates = Array.from(deduped.values());
+        // Deduplicate sessions claimed by multiple agents scanning the same directory.
+        const dedupedAggregates = deduplicateAggregates(allAggregates);
         if (dedupedAggregates.length < allAggregates.length) {
           debug(
             `Deduplicated sessions: ${allAggregates.length} \u2192 ${dedupedAggregates.length}`,
