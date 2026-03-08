@@ -269,9 +269,7 @@ const SessionRow = memo(function SessionRow({
             {isEstimated ? "≈" : " "}
             {formatTokensVal(animatedTokens).padStart(7)}
           </span>
-          <span fg={colors.textMuted}>
-            {hasCacheData ? ` ↯${formatCacheBadge(cacheRead)}` : ""}
-          </span>
+          <span fg={textMutedColor}>{hasCacheData ? ` ↯${formatCacheBadge(cacheRead)}` : ""}</span>
         </text>
         <text width={8} height={1} fg={costColor} {...bgProp}>
           {costDisplay.padStart(7)}
@@ -327,7 +325,7 @@ const SessionRow = memo(function SessionRow({
           {isEstimated ? "≈" : " "}
           {formatTokensVal(animatedTokens).padStart(7)}
         </span>
-        <span fg={colors.textMuted}>
+        <span fg={textMutedColor}>
           {hasCacheData && showCacheBadge ? ` ↯${formatCacheBadge(cacheRead)}` : ""}
         </span>
       </text>
