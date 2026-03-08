@@ -1,5 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react";
 import { useMemo } from "react";
+import type { ProviderErrorCategory } from "@/utils/error-category.ts";
 import { useConfig } from "../contexts/ConfigContext.tsx";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { usePulse } from "../hooks/usePulse.ts";
@@ -34,6 +35,7 @@ interface ProviderData {
   usedPercent: number;
   color: string;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
   resetTime?: string;
   used?: number;
   limit?: number;
@@ -186,6 +188,7 @@ export function ProviderLimitsPanel({
               usedPercent={p.usedPercent}
               color={p.color}
               {...(p.error ? { error: p.error } : {})}
+              {...(p.errorCategory ? { errorCategory: p.errorCategory } : {})}
               compact={true}
               selected={focused && startIndex + idx === safeSelectedIndex}
               warningThreshold={warningThreshold}
@@ -269,6 +272,7 @@ export function ProviderLimitsPanel({
               usedPercent={p.usedPercent}
               color={p.color}
               {...(p.error ? { error: p.error } : {})}
+              {...(p.errorCategory ? { errorCategory: p.errorCategory } : {})}
               {...(p.resetTime ? { resetTime: p.resetTime } : {})}
               labelWidth={14}
               barWidth={12}
@@ -326,6 +330,7 @@ export function ProviderLimitsPanel({
             usedPercent={p.usedPercent}
             color={p.color}
             {...(p.error ? { error: p.error } : {})}
+            {...(p.errorCategory ? { errorCategory: p.errorCategory } : {})}
             {...(p.resetTime ? { resetTime: p.resetTime } : {})}
             labelWidth={12}
             barWidth={10}

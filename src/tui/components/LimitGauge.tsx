@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { getErrorCategoryDisplay, type ProviderErrorCategory } from "@/utils/error-category.ts";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { usePulse } from "../hooks/usePulse.ts";
 
@@ -8,6 +9,7 @@ interface LimitGaugeProps {
   color: string;
   ghost?: boolean;
   error?: string;
+  errorCategory?: ProviderErrorCategory;
   resetTime?: string;
   compact?: boolean;
   labelWidth?: number;
@@ -89,6 +91,7 @@ export function LimitGauge({
   color,
   ghost = false,
   error,
+  errorCategory,
   resetTime,
   compact = false,
   labelWidth = 12,
@@ -152,7 +155,12 @@ export function LimitGauge({
 
   if (error) {
     const displayLabel = truncateLabel(label, labelWidth);
-    const errorIcon = selected ? "▌" : "✗";
+
+    const display = errorCategory ? getErrorCategoryDisplay(errorCategory) : undefined;
+    const errColor = display?.isWarning ? colors.warning : colors.error;
+    const errLabel = display?.label ?? "ERR";
+    const errorIcon = selected ? "\u258C" : (display?.icon ?? "\u2717");
+
     return (
       <box
         height={1}
@@ -160,10 +168,10 @@ export function LimitGauge({
         {...(selected ? { backgroundColor: colors.borderMuted } : {})}
       >
         <text height={1}>
-          <span fg={selected ? colors.primary : colors.error}>{errorIcon} </span>
+          <span fg={selected ? colors.primary : errColor}>{errorIcon} </span>
           <span fg={selected ? colors.text : colors.text}>{displayLabel} </span>
-          <span fg={colors.error}>{"─".repeat(barWidth)}</span>
-          <span fg={colors.error}> ERR</span>
+          <span fg={errColor}>{"\u2500".repeat(barWidth)}</span>
+          <span fg={errColor}> {errLabel}</span>
         </text>
       </box>
     );
