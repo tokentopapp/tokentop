@@ -397,11 +397,8 @@ export const SessionsTable = forwardRef(function SessionsTable(
   const { items: animatedSessions, isBulkChange } = useExitAnimation(sessions, {
     durationMs: 500,
     getKey: getSessionKey,
+    bulkThreshold: 100,
   });
-
-  // Track bulk changes to force scrollbox remount (clears ghost text)
-  const bulkCountRef = useRef(0);
-  if (isBulkChange) bulkCountRef.current++;
 
   let activeIndex = 0;
   const selectedSession = sessions[selectedRow] ?? null;
@@ -523,7 +520,7 @@ export const SessionsTable = forwardRef(function SessionsTable(
         </box>
       )}
 
-      <scrollbox key={`sessions-sb-${bulkCountRef.current}`} ref={ref} flexGrow={1}>
+      <scrollbox ref={ref} flexGrow={1}>
         <box flexDirection="column" flexGrow={1}>
           {sessions.length === 0 && animatedSessions.length === 0 && (
             <box paddingLeft={2}>

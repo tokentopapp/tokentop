@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { aggregateSessionUsage } from "@/agents/aggregator.ts";
+import { aggregateSessionUsage, deduplicateAggregates } from "@/agents/aggregator.ts";
 import { priceSessions } from "@/agents/costing.ts";
 import type { AgentId, AgentInfo, AgentSessionAggregate } from "@/agents/types.ts";
 import { createPluginContext } from "@/plugins/plugin-context-factory.ts";
@@ -193,7 +193,17 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
           }
         }
 
-        const pricedSessions = await priceSessions(allAggregates);
+        // Deduplicate sessions claimed by multiple agents scanning the same directory.
+        const dedupedAggregates = deduplicateAggregates(allAggregates);
+        if (dedupedAggregates.length < allAggregates.length) {
+          debug(
+            `Deduplicated sessions: ${allAggregates.length} \u2192 ${dedupedAggregates.length}`,
+            undefined,
+            "agent-sessions",
+          );
+        }
+
+        const pricedSessions = await priceSessions(dedupedAggregates);
 
         pricedSessions.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 
