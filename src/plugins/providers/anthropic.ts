@@ -234,6 +234,25 @@ export const anthropicPlugin: ProviderPlugin = {
       if (!response.ok) {
         log.warn("Failed to fetch Anthropic usage", { status: response.status });
 
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get("retry-after");
+          const parsedRetryAfter = retryAfterHeader
+            ? Number.parseInt(retryAfterHeader, 10)
+            : Number.NaN;
+          const retrySec =
+            Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0 ? parsedRetryAfter : 300;
+          log.warn("Rate limited by Anthropic API", {
+            retryAfterHeader,
+            retryAfterSec: retrySec,
+          });
+          return {
+            fetchedAt: Date.now(),
+            error: `Rate limited. Retry after ${retrySec}s.`,
+            rateLimited: true,
+            retryAfterMs: retrySec * 1000,
+          };
+        }
+
         if (response.status === 401) {
           return {
             fetchedAt: Date.now(),

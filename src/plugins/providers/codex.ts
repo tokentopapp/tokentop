@@ -178,6 +178,22 @@ export const codexPlugin: ProviderPlugin = {
         const bodyText = await response.text().catch(() => "");
         log.warn("Failed to fetch ChatGPT usage", { status: response.status, body: bodyText });
 
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get("retry-after");
+          const parsedRetryAfter = retryAfterHeader
+            ? Number.parseInt(retryAfterHeader, 10)
+            : Number.NaN;
+          const retrySec =
+            Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0 ? parsedRetryAfter : 300;
+          log.warn("Rate limited by ChatGPT API", { retryAfterHeader, retryAfterSec: retrySec });
+          return {
+            fetchedAt: Date.now(),
+            error: `Rate limited. Retry after ${retrySec}s.`,
+            rateLimited: true,
+            retryAfterMs: retrySec * 1000,
+          };
+        }
+
         if (response.status === 401) {
           return {
             fetchedAt: Date.now(),
