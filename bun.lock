@@ -11,7 +11,7 @@
         "@tokentop/agent-copilot-cli": "^1.0.0",
         "@tokentop/agent-cursor": "^1.2.0",
         "@tokentop/agent-opencode": "^1.0.0",
-        "@tokentop/plugin-sdk": "^1.3.0",
+        "@tokentop/plugin-sdk": "^1.4.0",
         "react": "^19.0.0",
         "react-devtools-core": "^7.0.1",
         "zod": "^4.0.0",
@@ -129,7 +129,7 @@
 
     "@tokentop/agent-opencode": ["@tokentop/agent-opencode@1.0.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-2Y/1sBULn+VHnQDdVqaWLOTiTCEN5OGPWkZ3C+njmdJVfgAEZ6tL6rV8iFxZvWITV5gr845WV+3m1jZEy/dffw=="],
 
-    "@tokentop/plugin-sdk": ["@tokentop/plugin-sdk@1.3.0", "", {}, "sha512-1sorjLYRgXNh6bJRe53m8aMJ9dpOdHvDb5ZSmQ58GN2iu+wOYoNQmkwJr4TTHr//K/hymTd0hPn1w+OA78bkAQ=="],
+    "@tokentop/plugin-sdk": ["@tokentop/plugin-sdk@1.4.0", "", {}, "sha512-gPuSUrZCutQB0FY2Yn/6zfl4BMHd83zJ2IyAIOGJJ8AGMvI3k++KhaYp3U5Cw7kepK8lCPOGp9RnvPji014DVg=="],
 
     "@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
 
