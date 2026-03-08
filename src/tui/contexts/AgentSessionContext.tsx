@@ -193,7 +193,39 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
           }
         }
 
-        const pricedSessions = await priceSessions(allAggregates);
+        // --- Deduplicate sessions claimed by multiple agents ---
+        // When two agent plugins scan the same directory (e.g. both
+        // agent-antigravity and agent-gemini-cli read ~/.gemini/tmp/),
+        // they produce separate aggregates for the same sessionId.
+        // Keep the richer aggregate (more streams, then more requests).
+        const deduped = new Map<string, AgentSessionAggregate>();
+        for (const agg of allAggregates) {
+          const existing = deduped.get(agg.sessionId);
+          if (!existing) {
+            deduped.set(agg.sessionId, agg);
+            continue;
+          }
+          // Prefer the aggregate with more streams (richer data),
+          // then more requests, then keep the earlier one.
+          if (
+            agg.streams.length > existing.streams.length ||
+            (agg.streams.length === existing.streams.length &&
+              agg.requestCount > existing.requestCount)
+          ) {
+            deduped.set(agg.sessionId, agg);
+          }
+        }
+
+        const dedupedAggregates = Array.from(deduped.values());
+        if (dedupedAggregates.length < allAggregates.length) {
+          debug(
+            `Deduplicated sessions: ${allAggregates.length} \u2192 ${dedupedAggregates.length}`,
+            undefined,
+            "agent-sessions",
+          );
+        }
+
+        const pricedSessions = await priceSessions(dedupedAggregates);
 
         pricedSessions.sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 
