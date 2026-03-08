@@ -10,6 +10,7 @@
         "@tokentop/agent-claude-code": "^1.1.0",
         "@tokentop/agent-copilot-cli": "^1.0.0",
         "@tokentop/agent-cursor": "^1.2.0",
+        "@tokentop/agent-gemini": "^1.0.0",
         "@tokentop/agent-opencode": "^1.0.0",
         "@tokentop/plugin-sdk": "^1.4.0",
         "react": "^19.0.0",
@@ -126,6 +127,8 @@
     "@tokentop/agent-copilot-cli": ["@tokentop/agent-copilot-cli@1.0.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.3.0" } }, "sha512-PefkIAyBE+ZoVJQVMbNmfbg5O4Hk8nJwGzwSQwGKC56GqxFKEVOtFjARaHmPasrHF6fNbW2yWRDgSA8hl33nzw=="],
 
     "@tokentop/agent-cursor": ["@tokentop/agent-cursor@1.2.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.3.0" } }, "sha512-U+DP3Ih/ViveSYwvc007RxJjlvclFEqR0qOHkaH/5i7Lj7+On+01h3tRvJl6YbM9wCRbcpYNjEPuzci4otMm1Q=="],
+
+    "@tokentop/agent-gemini": ["@tokentop/agent-gemini@1.0.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-iXbWiSGtBi77Ok0leGbatgVmvuQ+i7TiaA6E3ZYi0uYrrzHDMQjCR9DqpqHThT0O9ghQHggsL0GrAlbHfMPRgw=="],
 
     "@tokentop/agent-opencode": ["@tokentop/agent-opencode@1.0.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-2Y/1sBULn+VHnQDdVqaWLOTiTCEN5OGPWkZ3C+njmdJVfgAEZ6tL6rV8iFxZvWITV5gr845WV+3m1jZEy/dffw=="],
 

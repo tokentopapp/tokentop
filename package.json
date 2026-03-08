@@ -38,6 +38,7 @@
     "@tokentop/agent-claude-code": "^1.1.0",
     "@tokentop/agent-copilot-cli": "^1.0.0",
     "@tokentop/agent-cursor": "^1.2.0",
+    "@tokentop/agent-gemini": "^1.0.0",
     "@tokentop/agent-opencode": "^1.0.0",
     "@tokentop/plugin-sdk": "^1.4.0",
     "react": "^19.0.0",
