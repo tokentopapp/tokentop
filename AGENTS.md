@@ -236,6 +236,7 @@ Display estimated costs with `~` indicator: `~$0.0234`
 - Integration tests for credential discovery
 - Snapshot tests for TUI components
 - Mock external APIs in tests
+- **Bug fix regression tests (MANDATORY)**: Every bug fix MUST include a unit test that reproduces the bug and verifies the fix. The test should fail without the fix and pass with it. This prevents regressions and documents the bug's root cause for future developers. No bug fix PR should be merged without an accompanying test.
 
 ## Code Style
 
