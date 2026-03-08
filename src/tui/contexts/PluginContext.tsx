@@ -44,6 +44,8 @@ export interface ProviderState {
   loading: boolean;
   lastFetchAt: number | null;
   history: UsageSnapshot[];
+  /** Timestamp (ms) until which this provider should be skipped due to rate limiting. 0 = not rate limited. */
+  rateLimitUntil: number;
 }
 
 interface PluginContextValue {
@@ -190,6 +192,7 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
           loading: false,
           lastFetchAt: null,
           history: [],
+          rateLimitUntil: 0,
         });
 
         if (configured) {
@@ -264,6 +267,18 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
         return;
       }
 
+      // Skip providers that are currently rate-limited (backoff)
+      const now = Date.now();
+      if (state.rateLimitUntil > now) {
+        const remainingSec = Math.round((state.rateLimitUntil - now) / 1000);
+        debug(
+          `Skipping ${providerId}: rate limited for ${remainingSec}s more`,
+          undefined,
+          "refresh",
+        );
+        return;
+      }
+
       info(`Refreshing ${providerId}...`, undefined, "refresh");
 
       setProviders((prev) => {
@@ -310,6 +325,7 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
               usage,
               loading: false,
               lastFetchAt: Date.now(),
+              rateLimitUntil: 0,
               history: addToHistory(currentHistory, snapshotEntry),
             });
             return next;
@@ -337,16 +353,24 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
         const http = createSandboxedHttpClient(providerId, state.plugin.permissions);
         const logger = createPluginLogger(providerId);
 
-        const fetchResult = await safeInvoke(providerId, "fetchUsage", () =>
-          runInPluginGuard(providerId, state.plugin.permissions, () =>
-            state.plugin.fetchUsage({
-              credentials: creds,
-              http,
-              logger,
-              config: {},
-              signal: AbortSignal.timeout(30_000),
-            }),
-          ),
+        const fetchResult = await safeInvoke(
+          providerId,
+          "fetchUsage",
+          () =>
+            runInPluginGuard(providerId, state.plugin.permissions, () =>
+              state.plugin.fetchUsage({
+                credentials: creds,
+                http,
+                logger,
+                config: {},
+                signal: AbortSignal.timeout(30_000),
+              }),
+            ),
+          {
+            // Count non-rate-limit errors as circuit breaker failures.
+            // Rate limits are handled separately via backoff scheduling.
+            isFailure: (usage) => !!usage.error && !usage.rateLimited,
+          },
         );
 
         if (!fetchResult.ok) {
@@ -354,6 +378,34 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
         }
 
         const usage = fetchResult.value;
+
+        // Handle rate-limited responses: set backoff, preserve last good data
+        if (usage.rateLimited) {
+          const backoffMs = usage.retryAfterMs ?? 300_000; // default 5 min
+          const backoffUntil = Date.now() + backoffMs;
+          warn(
+            `${providerId} rate limited, backing off for ${Math.round(backoffMs / 1000)}s`,
+            { retryAfterMs: backoffMs, until: new Date(backoffUntil).toISOString() },
+            "refresh",
+          );
+
+          setProviders((prev) => {
+            const next = new Map(prev);
+            const current = next.get(providerId);
+            // Preserve the last successful usage data if we have it
+            const preservedUsage = current?.usage && !current.usage.error ? current.usage : usage;
+            next.set(providerId, {
+              ...state,
+              usage: preservedUsage,
+              loading: false,
+              lastFetchAt: Date.now(),
+              rateLimitUntil: backoffUntil,
+              history: current?.history ?? [],
+            });
+            return next;
+          });
+          return;
+        }
 
         if (usage.error) {
           warn(`${providerId} returned error: ${usage.error}`, undefined, "refresh");
@@ -399,6 +451,7 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
             usage,
             loading: false,
             lastFetchAt: Date.now(),
+            rateLimitUntil: 0,
             history: addToHistory(currentHistory, snapshot),
           });
           return next;
@@ -418,6 +471,7 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
             },
             loading: false,
             lastFetchAt: Date.now(),
+            rateLimitUntil: current?.rateLimitUntil ?? 0,
             history: current?.history ?? [],
           });
           return next;

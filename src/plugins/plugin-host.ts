@@ -53,17 +53,40 @@ export type SafeInvokeResult<T> =
   | { ok: false; error: Error; circuitOpen: boolean };
 
 /**
+ * Options for `safeInvoke`.
+ *
+ * @template T  The return type of the plugin method.
+ */
+export interface SafeInvokeOptions<T> {
+  /**
+   * Optional predicate that inspects a *successful* return value and decides
+   * whether it should count as a logical failure for the circuit breaker.
+   *
+   * Use this when plugins return error-carrying objects instead of throwing
+   * (e.g. `{ error: "429 Too Many Requests" }`).
+   *
+   * When the predicate returns `true`:
+   *   - The circuit breaker's failure counter is incremented
+   *   - The value is still returned as `{ ok: true, value }` so the caller
+   *     can inspect the error details
+   */
+  isFailure?: (value: T) => boolean;
+}
+
+/**
  * Safely invoke a plugin method with circuit breaker protection.
  *
  * @param pluginId  Unique plugin identifier (for circuit tracking + logging)
  * @param method    Human-readable method name (for logging, e.g. "fetchUsage")
  * @param fn        The actual async function to call
+ * @param options   Optional configuration (e.g. `isFailure` predicate)
  * @returns         `{ ok: true, value }` or `{ ok: false, error, circuitOpen }`
  */
 export async function safeInvoke<T>(
   pluginId: string,
   method: string,
   fn: () => Promise<T>,
+  options?: SafeInvokeOptions<T>,
 ): Promise<SafeInvokeResult<T>> {
   const circuit = getCircuit(pluginId);
   const log = createPluginLogger(pluginId);
@@ -91,7 +114,28 @@ export async function safeInvoke<T>(
   try {
     const value = await fn();
 
-    // Success — reset consecutive failures
+    // Check for logical failures (e.g. provider returned { error: "..." })
+    if (options?.isFailure?.(value)) {
+      circuit.consecutiveFailures++;
+      circuit.totalFailures++;
+      circuit.lastFailureAt = Date.now();
+
+      log.warn(
+        `${method} returned logical failure (${circuit.consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`,
+      );
+
+      if (circuit.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        circuit.disabledUntil = Date.now() + COOLDOWN_MS;
+        log.error(
+          `Circuit OPEN — plugin disabled for ${COOLDOWN_MS / 1000}s after ${circuit.consecutiveFailures} consecutive failures`,
+        );
+      }
+
+      // Still return the value — caller needs the error details
+      return { ok: true, value };
+    }
+
+    // True success — reset consecutive failures
     if (circuit.consecutiveFailures > 0) {
       log.info(
         `${method} succeeded — resetting circuit breaker (was at ${circuit.consecutiveFailures} failures)`,
