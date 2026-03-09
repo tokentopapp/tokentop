@@ -30,7 +30,8 @@
     "test:watch": "bun test --watch",
     "driver": "bun src/tui/driver/cli.ts",
     "driver:help": "bun src/tui/driver/cli.ts --help",
-    "snapshot": "bun src/tui/debug/snapshot.tsx"
+    "snapshot": "bun src/tui/debug/snapshot.tsx",
+    "analytics": "bun .opencode/skills/analytics/scripts/analytics.ts"
   },
   "dependencies": {
     "@opentui/core": "0.1.86",
