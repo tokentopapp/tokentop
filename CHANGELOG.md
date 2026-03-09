@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.6.0](https://github.com/tokentopapp/tokentop/compare/v0.5.0...v0.6.0) (2026-03-09)
+
+
+### Features
+
+* add --theme CLI flag and fix theme override after plugin load ([ed9b7bc](https://github.com/tokentopapp/tokentop/commit/ed9b7bccf5a294e0c04327c7bf0a6b4e1791b0a5))
+* **agents:** add Gemini agent plugin for session tracking ([1b06783](https://github.com/tokentopapp/tokentop/commit/1b067832243d490c7985ec0d04c6ec4ccc90b2ce))
+* distinguish expired/invalid tokens from generic errors on limit gauges ([#67](https://github.com/tokentopapp/tokentop/issues/67)) ([ac019d2](https://github.com/tokentopapp/tokentop/commit/ac019d2e6d71d5140bd7a0145c26927612e6ff5b)), closes [#29](https://github.com/tokentopapp/tokentop/issues/29)
+* **sort:** unified htop-style sort overlay for Dashboard and Projects ([#54](https://github.com/tokentopapp/tokentop/issues/54)) ([3d4a78d](https://github.com/tokentopapp/tokentop/commit/3d4a78d06fd60fffb3bad753466ed31084c7fe61))
+
+
+### Bug Fixes
+
+* handle Anthropic 429 rate limit with backoff and fix circuit breaker bypass ([#68](https://github.com/tokentopapp/tokentop/issues/68)) ([09f3fca](https://github.com/tokentopapp/tokentop/commit/09f3fcad56d8827917530c0e6ca8d48757a297e2))
+* prevent Antigravity sessions from breaking session list ([#66](https://github.com/tokentopapp/tokentop/issues/66)) ([93bbca8](https://github.com/tokentopapp/tokentop/commit/93bbca838f5a73afbaf124a506becf499140a33b))
+* replace 1-second session polling with adaptive interval and change detection ([#56](https://github.com/tokentopapp/tokentop/issues/56)) ([#60](https://github.com/tokentopapp/tokentop/issues/60)) ([0deb2e1](https://github.com/tokentopapp/tokentop/commit/0deb2e10af2c13adc70bfa6b93d72f00526a7d12))
+* replace per-component animation timers with shared 30Hz tick ([#55](https://github.com/tokentopapp/tokentop/issues/55)) ([#59](https://github.com/tokentopapp/tokentop/issues/59)) ([7d58c43](https://github.com/tokentopapp/tokentop/commit/7d58c43ef47ef9b90555c4682a3958a7d8d50d7a))
+* use faded color for cache badge during row animations ([0e53b6c](https://github.com/tokentopapp/tokentop/commit/0e53b6c93b20fdd5a48eb4edf644b569099d1a1e)), closes [#8](https://github.com/tokentopapp/tokentop/issues/8)
+
+
+### Performance
+
+* eliminate O(n²) session aggregation by collecting metadata in first pass ([#62](https://github.com/tokentopapp/tokentop/issues/62)) ([#63](https://github.com/tokentopapp/tokentop/issues/63)) ([0898dd4](https://github.com/tokentopapp/tokentop/commit/0898dd47e09dce0a9192b393072bae00e1bd5e4e))
+
 ## [0.5.0](https://github.com/tokentopapp/tokentop/compare/v0.4.0...v0.5.0) (2026-02-28)
 
 
