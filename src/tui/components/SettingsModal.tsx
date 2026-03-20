@@ -2,6 +2,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import type { ConfigField, PluginType } from "@tokentop/plugin-sdk";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppConfig, SparklineOrientation, SparklineStyle } from "@/config/schema.ts";
+import { notificationBus } from "@/plugins/notification-bus.ts";
 import { formatBudgetDisplay, parseCurrencyInput } from "@/utils/currency.ts";
 import { useConfig } from "../contexts/ConfigContext.tsx";
 import { useDemoMode } from "../contexts/DemoModeContext.tsx";
@@ -20,10 +21,11 @@ interface SettingItem {
   description?: string;
   category: SettingCategory;
   pluginId?: string;
-  type: "toggle" | "select" | "number";
+  type: "toggle" | "select" | "number" | "action";
   options?: string[];
   getValue: (config: AppConfig) => string | number | boolean | null;
   setValue: (config: AppConfig, value: string | number | boolean | null) => AppConfig;
+  onAction?: () => void;
 }
 
 const BASE_SETTINGS: SettingItem[] = [
@@ -205,6 +207,16 @@ const BASE_SETTINGS: SettingItem[] = [
       notifications: { ...c.notifications, soundEnabled: v as boolean },
     }),
   },
+  {
+    key: "testNotification",
+    label: "Test Notifications",
+    description: "Send a test notification to verify toast, flash, and sound alerts are working.",
+    category: "notifications",
+    type: "action",
+    onAction: () => void notificationBus.testNotification(),
+    getValue: () => "▸ Run",
+    setValue: (c) => c,
+  },
 ];
 
 const CATEGORIES: { id: SettingCategory; label: string }[] = [
@@ -362,7 +374,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     provider: "Providers",
     agent: "Agents",
     theme: "Themes",
-    notification: "Delivery",
+    notification: "Notifications",
   };
 
   // Stable ordering for plugin type groups in sidebar
@@ -621,7 +633,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         setSelectedIndex((i) => Math.max(i - 1, 0));
       } else if (key.name === "return" || key.name === "space") {
         const setting = categorySettings[selectedIndex];
-        if (setting?.key === "theme") {
+        if (setting?.type === "action" && setting.onAction) {
+          setting.onAction();
+        } else if (setting?.key === "theme") {
           setShowThemePicker(true);
         } else if (setting?.type === "number") {
           startEditingNumber();
@@ -832,7 +846,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       setting.type === "number" && editingSettingKey === setting.key;
 
                     let displayValue: string;
-                    if (setting.key === "theme") {
+                    if (setting.type === "action") {
+                      displayValue = "▸ Run";
+                    } else if (setting.key === "theme") {
                       const themeName = themes.find((t) => t.id === value)?.name ?? value;
                       displayValue = `${themeName} ▸`;
                     } else if (setting.type === "toggle") {

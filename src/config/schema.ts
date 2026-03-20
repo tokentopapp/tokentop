@@ -82,7 +82,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   notifications: {
     toastsEnabled: true,
-    soundEnabled: false,
+    soundEnabled: true,
   },
   budgets: {
     daily: null,

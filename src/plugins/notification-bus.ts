@@ -18,6 +18,16 @@ class NotificationBus {
   private plugins: NotificationPlugin[] = [];
   private recentEvents = new Map<string, DedupEntry>();
   private pluginConfigs = new Map<string, Record<string, unknown>>();
+  private toastHandler: ((event: NotificationEvent) => void) | null = null;
+  private flashHandler: ((severity: NotificationEvent["severity"]) => void) | null = null;
+
+  setToastHandler(handler: ((event: NotificationEvent) => void) | null): void {
+    this.toastHandler = handler;
+  }
+
+  setFlashHandler(handler: ((severity: NotificationEvent["severity"]) => void) | null): void {
+    this.flashHandler = handler;
+  }
 
   registerPlugins(plugins: NotificationPlugin[]): void {
     this.plugins = plugins;
@@ -124,6 +134,23 @@ class NotificationBus {
         );
       }),
     );
+
+    this.toastHandler?.(event);
+    this.flashHandler?.(event.severity);
+  }
+
+  async testNotification(): Promise<void> {
+    const event: NotificationEvent = {
+      type: "budget.thresholdCrossed",
+      severity: "warning",
+      title: "Test Notification",
+      message: "This is a test notification from tokentop.",
+      timestamp: Date.now(),
+      data: {},
+    };
+    // Bypass dedup for test
+    await this.emit("__test__", event);
+    this.recentEvents.delete("__test__");
   }
 
   private isDuplicate(key: string): boolean {

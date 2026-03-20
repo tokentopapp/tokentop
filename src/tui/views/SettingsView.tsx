@@ -2,6 +2,7 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import type { ConfigField } from "@tokentop/plugin-sdk";
 import { useCallback, useMemo, useState } from "react";
 import type { AppConfig } from "@/config/schema.ts";
+import { notificationBus } from "@/plugins/notification-bus.ts";
 import { useConfig } from "../contexts/ConfigContext.tsx";
 import { useDemoMode } from "../contexts/DemoModeContext.tsx";
 import { usePlugins } from "../contexts/PluginContext.tsx";
@@ -14,10 +15,11 @@ interface SettingItem {
   key: string;
   label: string;
   category: SettingCategory;
-  type: "toggle" | "select" | "number";
+  type: "toggle" | "select" | "number" | "action";
   options?: string[];
   getValue: (config: AppConfig) => string | number | boolean;
   setValue: (config: AppConfig, value: string | number | boolean) => AppConfig;
+  onAction?: () => void;
 }
 
 const SETTINGS: SettingItem[] = [
@@ -191,6 +193,15 @@ const SETTINGS: SettingItem[] = [
       ...c,
       notifications: { ...c.notifications, soundEnabled: v as boolean },
     }),
+  },
+  {
+    key: "testNotification",
+    label: "Test Notifications",
+    category: "notifications",
+    type: "action",
+    onAction: () => void notificationBus.testNotification(),
+    getValue: () => "▸ Run",
+    setValue: (c) => c,
   },
 ];
 
@@ -384,6 +395,11 @@ export function SettingsView() {
       } else if (key.name === "up" || key.name === "k") {
         setSelectedIndex((i) => Math.max(i - 1, 0));
       } else if (key.name === "return" || key.name === "space") {
+        const setting = categorySettings[selectedIndex];
+        if (setting?.type === "action" && setting.onAction) {
+          setting.onAction();
+          return;
+        }
         toggleCurrentSetting();
       } else if (key.name === "left" || key.name === "h") {
         const setting = categorySettings[selectedIndex];
@@ -479,13 +495,15 @@ export function SettingsView() {
               >
                 <text fg={isSelected ? colors.background : colors.text}>{setting.label}</text>
                 <text fg={isSelected ? colors.background : colors.textMuted}>
-                  {setting.type === "toggle"
-                    ? value
-                      ? "● ON"
-                      : "○ OFF"
-                    : setting.type === "select"
-                      ? `◂ ${value} ▸`
-                      : String(value)}
+                  {setting.type === "action"
+                    ? "▸ Run"
+                    : setting.type === "toggle"
+                      ? value
+                        ? "● ON"
+                        : "○ OFF"
+                      : setting.type === "select"
+                        ? `◂ ${value} ▸`
+                        : String(value)}
                 </text>
               </box>
             );

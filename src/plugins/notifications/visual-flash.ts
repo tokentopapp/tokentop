@@ -12,7 +12,7 @@ export const visualFlashPlugin: NotificationPlugin = {
   version: "1.0.0",
 
   meta: {
-    description: "Visual screen flash using ANSI escape sequences",
+    description: "Visual screen flash for alerts (rendered via TUI overlay)",
   },
 
   permissions: {},
@@ -27,7 +27,7 @@ export const visualFlashPlugin: NotificationPlugin = {
     duration: {
       type: "number",
       label: "Flash duration (ms)",
-      default: 100,
+      default: 150,
       description: "Flash duration in milliseconds",
     },
   },
@@ -44,26 +44,13 @@ export const visualFlashPlugin: NotificationPlugin = {
     ctx.logger.debug("Visual flash notification plugin initialized");
   },
 
-  async notify(ctx: NotificationContext, event: NotificationEvent): Promise<void> {
-    const duration = (ctx.config.duration as number) ?? 100;
-
-    const colorCode =
-      event.severity === "critical" ? "41" : event.severity === "warning" ? "43" : "42";
-
-    process.stdout.write(`\x1b[${colorCode}m`);
-    await sleep(duration);
-    process.stdout.write("\x1b[0m");
+  async notify(_ctx: NotificationContext, _event: NotificationEvent): Promise<void> {
+    // Flash is handled by the NotificationFlash React component via
+    // notificationBus.flashHandler — raw ANSI escapes conflict with OpenTUI.
   },
 
   async test(ctx: NotificationContext): Promise<boolean> {
     ctx.logger.info("Testing visual flash...");
-    process.stdout.write("\x1b[44m");
-    await sleep(100);
-    process.stdout.write("\x1b[0m");
     return true;
   },
 };
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

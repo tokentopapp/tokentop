@@ -16,6 +16,7 @@ import { copyToClipboard } from "@/utils/clipboard.ts";
 import { type CommandAction, CommandPalette } from "./components/CommandPalette.tsx";
 import { DebugPanel } from "./components/DebugPanel.tsx";
 import { Header } from "./components/Header.tsx";
+import { NotificationFlash } from "./components/NotificationFlash.tsx";
 import { SessionDetailsDrawer } from "./components/SessionDetailsDrawer.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { StatusBar } from "./components/StatusBar.tsx";
@@ -35,6 +36,7 @@ import { RealTimeActivityProvider } from "./contexts/RealTimeActivityContext.tsx
 import { StorageProvider } from "./contexts/StorageContext.tsx";
 import { TimeWindowProvider } from "./contexts/TimeWindowContext.tsx";
 import { ToastProvider, useToastContext } from "./contexts/ToastContext.tsx";
+import { useNotificationBridge } from "./hooks/useNotificationBridge.ts";
 import { useSafeRenderer } from "./hooks/useSafeRenderer.ts";
 import { triggerShutdown } from "./shutdown.ts";
 import { Dashboard } from "./views/Dashboard.tsx";
@@ -67,6 +69,8 @@ function AppContent() {
   const { sessions } = useAgentSessions();
   const { debugDataRef, activity, sparkData } = useDashboardRuntime();
   const burstRecorderRef = { current: null as BurstRecorder | null };
+
+  useNotificationBridge();
 
   const refreshInterval = config.refresh.pauseAutoRefresh ? 0 : config.refresh.intervalMs;
 
@@ -363,6 +367,8 @@ function AppContent() {
       {isDrawerOpen && selectedSession && (
         <SessionDetailsDrawer session={selectedSession} onClose={hideDrawer} />
       )}
+
+      <NotificationFlash />
     </box>
   );
 }

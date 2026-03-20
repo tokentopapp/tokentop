@@ -241,6 +241,14 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
     initialize();
   }, []);
 
+  useEffect(() => {
+    if (!isInitialized) return;
+    notificationBus.setPluginConfig("terminal-bell", {
+      ...((config.pluginConfig ?? {})["terminal-bell"] ?? {}),
+      enabled: config.notifications.soundEnabled,
+    });
+  }, [config.notifications.soundEnabled, isInitialized]);
+
   const prevPluginConfigRef = useRef<Record<string, Record<string, unknown>>>({});
   useEffect(() => {
     if (!isInitialized) return;
