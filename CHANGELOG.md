@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/tokentopapp/tokentop/compare/v0.6.0...v0.6.1) (2026-03-20)
+
+
+### Bug Fixes
+
+* improve notification UX — border glow, system sounds, longer toasts ([889c94d](https://github.com/tokentopapp/tokentop/commit/889c94d90392f74d29645ee54a04758fda405cb9))
+* wire notification system to TUI (toast bridge, RGBA flash, bell toggle) ([38bb470](https://github.com/tokentopapp/tokentop/commit/38bb47005c7207936a5cee0b67c5319cf2d789fb))
+
 ## [0.6.0](https://github.com/tokentopapp/tokentop/compare/v0.5.0...v0.6.0) (2026-03-09)
 
 
