@@ -8,7 +8,7 @@ interface ToastProps {
   type?: "info" | "success" | "warning" | "error";
 }
 
-export function Toast({ message, duration = 2000, onDismiss, type = "success" }: ToastProps) {
+export function Toast({ message, duration = 4000, onDismiss, type = "success" }: ToastProps) {
   const colors = useColors();
 
   useEffect(() => {
