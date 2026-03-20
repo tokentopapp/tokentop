@@ -1,5 +1,4 @@
- > [!CAUTION]
-> **tokentop is under active development and not yet ready for general use.** APIs and configuration may change without notice. If you're interested, star the repo and check back soon.
+ > **Early release** — tokentop is functional and actively developed. Please [report issues](https://github.com/tokentopapp/tokentop/issues)!
 
 <div align="center">
 
@@ -18,7 +17,9 @@ Real-time terminal monitoring of LLM token usage and spending across providers a
 [![Bun](https://img.shields.io/badge/Bun-runtime-f9f1e1?style=flat-square&logo=bun&logoColor=black)](https://bun.sh)
 [![Visitors](https://api.visitorbadge.io/api/visitors?path=https%3A%2F%2Fgithub.com%2Ftokentopapp%2Ftokentop&labelColor=%23697689&countColor=%23ba68c8&style=flat-square)](https://visitorbadge.io/status?path=https://github.com/tokentopapp/tokentop)
 
-[Features](#features) · [Install](#installation) · [Quick Start](#quick-start) · [Keyboard Shortcuts](#keyboard-shortcuts) · [Configuration](#configuration) · [Plugins](#plugin-system)
+[Features](#features) · [Install](#installation) · [Quick Start](#quick-start) · [Agents](#agents) · [Plugins](#plugin-system) · [Docs](https://tokentop.app/docs/getting-started/)
+
+**[tokentop.app](https://tokentop.app)**
 
 </div>
 
@@ -45,7 +46,7 @@ That's tokentop.
 
 - **Real-time dashboard** — Live token counts, costs, burn rate, and activity sparklines
 - **11 providers** — Anthropic, OpenAI, Google Gemini, GitHub Copilot, Codex, Perplexity, Antigravity, MiniMax, Zai, OpenCode Zen, Chutes
-- **Session tracking** — See every coding agent session with model, tokens, cost, and duration. Built-in support for Claude Code, OpenCode, Cursor, and Copilot CLI
+- **7 coding agents** — Claude Code, OpenCode, Cursor, Copilot CLI, Gemini CLI, Antigravity, and Windsurf. See every session with model, tokens, cost, and duration
 - **Budget guardrails** — Daily, weekly, and monthly limits with visual warnings at limit percentages you set
 - **Smart sidebar** — Adaptive panel that breaks down spending by model, project, or agent
 - **Efficiency insights** — Cache leverage, output verbosity, and cost-per-request analysis to help you spend less
@@ -53,11 +54,11 @@ That's tokentop.
 - **Projects view** — See which codebase is costing you the most
 - **Provider limits** — Visual gauges showing how close you are to rate limits
 - **Live pricing** — Fetches current model pricing from [models.dev](https://models.dev) with local caching
-- **15 built-in themes** — Dark: Tokyo Night (default), Dracula, Nord, Catppuccin Mocha, Gruvbox Dark, One Dark, Rosé Pine, Kanagawa, OpenCode, Claude Code · Light: Catppuccin Latte, Gruvbox Light, GitHub Light, Solarized Light, Rosé Pine Dawn
+- **[15 built-in themes](https://tokentop.app/docs/themes/built-in/)** — Tokyo Night, Dracula, Nord, Catppuccin, Gruvbox, Rosé Pine, Kanagawa, and more. Dark and light variants. Create your own with the [theme plugin API](https://tokentop.app/docs/themes/custom-themes/)
 - **Plugin system** — Extend with custom providers, agents, themes, and notifications
 - **Responsive layout** — Adapts to any terminal size; sidebar, KPI strip, header, and tables all reflow automatically from ultrawide to laptop-width
 - **Demo mode** — Explore the UI with synthetic data, no API keys needed
-- **Zero config** — Auto-discovers credentials from Claude Code, OpenCode, Cursor, Copilot CLI, environment variables, and CLI auth files
+- **Zero config** — Auto-discovers credentials from Claude Code, OpenCode, Cursor, Copilot CLI, Gemini CLI, environment variables, and CLI auth files
 
 ## Installation
 
@@ -141,9 +142,21 @@ tokentop has 4 main views, switchable with `1`–`4`:
 | `3` | **Trends** | ASCII step charts of cost over 7/30/90 days |
 | `4` | **Projects** | Cost and token breakdown by local project/repo |
 
-<!-- TODO: Add VHS recordings of each view
-> _Screenshots coming soon_
--->
+## Agents
+
+tokentop tracks sessions from 7 coding agents. Each agent is a standalone plugin — built-in agents ship with the app, community agents install from npm.
+
+| Agent | What it tracks | Plugin |
+|-------|---------------|--------|
+| [Claude Code](https://tokentop.app/docs/agents/claude-code/) | Sessions, OAuth tokens, multi-provider usage | [`@tokentop/agent-claude-code`](https://github.com/tokentopapp/agent-claude-code) |
+| [OpenCode](https://tokentop.app/docs/agents/opencode/) | Sessions, OAuth credentials, multi-provider support | [`@tokentop/agent-opencode`](https://github.com/tokentopapp/agent-opencode) |
+| [Cursor](https://tokentop.app/docs/agents/cursor/) | Sessions, CSV server log enrichment | [`@tokentop/agent-cursor`](https://github.com/tokentopapp/agent-cursor) |
+| [Copilot CLI](https://tokentop.app/docs/agents/copilot-cli/) | Sessions, GitHub token auth | [`@tokentop/agent-copilot-cli`](https://github.com/tokentopapp/agent-copilot-cli) |
+| [Gemini CLI](https://tokentop.app/docs/agents/gemini-cli/) | Sessions, Google OAuth | [`@tokentop/agent-gemini`](https://github.com/tokentopapp/agent-gemini) |
+| [Antigravity](https://tokentop.app/docs/agents/antigravity/) | Sessions, Google OAuth | [`@tokentop/agent-gemini`](https://github.com/tokentopapp/agent-gemini) |
+| [Windsurf](https://tokentop.app/docs/agents/windsurf/) | Sessions, Codeium auth | [`@tokentop/agent-windsurf`](https://github.com/tokentopapp/agent-windsurf) |
+
+All agents are auto-discovered — if you have the tool installed, tokentop finds it. See the [agent docs](https://tokentop.app/docs/agents/) for details.
 
 ## Keyboard Shortcuts
 
@@ -219,7 +232,7 @@ tokentop is built on a plugin architecture with four extension points:
 
 All plugins run in a **permission sandbox** — they must declare network, filesystem, and environment access upfront. Anyone can publish community plugins to npm — no org membership needed.
 
-See the [Plugin Guide](docs/plugins.md) for installation, configuration, and development details.
+See the [Plugin Guide](https://tokentop.app/docs/plugins/overview/) for installation, configuration, and development details.
 
 ## How It Works
 
@@ -232,6 +245,15 @@ Costs are calculated from token counts and live pricing data from [models.dev](h
 
 All data is stored in a **local SQLite database**. Nothing is sent anywhere. No telemetry, no analytics, no network calls except to the provider APIs you've already authenticated with.
 
+## Alternatives
+
+| Tool | Approach | Tokentop Difference |
+|------|----------|---------------------|
+| Provider dashboards | Web, hours behind | Real-time, in terminal |
+| [tokentap](https://github.com/nicholasgasior/tokentap) | MitM proxy (abandoned) | Native API polling, no proxy |
+| [toktop](https://github.com/jnsahaj/toktop) | Rust TUI, 2 providers | 11 providers, 7 agents, plugins |
+| [sniffly](https://github.com/chiphuyen/sniffly) | Python dashboard | Terminal-native, multi-agent |
+
 ## Development
 
 ```bash
@@ -239,7 +261,7 @@ bun install          # Install dependencies
 bun run dev          # Dev mode with hot reload
 bun test             # Run tests
 bun run typecheck    # TypeScript check
-bun run lint         # ESLint
+bun run lint         # Biome
 ```
 
 ### Demo mode for development
