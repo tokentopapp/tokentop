@@ -259,6 +259,15 @@ Display estimated costs with `~` indicator: `~$0.0234`
 - PR required for all changes
 - CI must pass before merge
 
+### Commit Message Rules (MANDATORY)
+
+Commit messages must be clean and professional. **NEVER** add:
+- `Co-authored-by: Sisyphus` or any AI agent co-author trailer
+- `Ultraworked with [Sisyphus]` or any AI attribution footer
+- Any `Co-authored-by:` trailer referencing an AI tool or agent
+
+Subject line + optional body only. No AI footers. No tool attribution.
+
 ### Green CI (MANDATORY)
 
 **Every PR must have green CI before requesting review.** This means:
