@@ -25,6 +25,7 @@
     "noImplicitOverride": true,
 
     // Path mapping
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
