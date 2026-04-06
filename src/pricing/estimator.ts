@@ -1,5 +1,7 @@
 import type { CostBreakdown, ModelPricing } from "@tokentop/plugin-sdk";
 
+export const LONG_CONTEXT_THRESHOLD = 200_000;
+
 export interface TokenUsage {
   input: number;
   output: number;
