@@ -27,6 +27,9 @@ export interface AgentSessionStream {
   modelId: string;
   tokens: TokenCounts;
   requestCount: number;
+  longContextTokens?: TokenCounts;
+  longContextRequestCount?: number;
+  hasLongContext?: boolean;
   costUsd?: number;
   costBreakdown?: StreamCostBreakdown;
   pricingSource?: "models.dev" | "fallback" | "unknown";
@@ -37,6 +40,10 @@ export interface StreamWindowedTokens {
   weekTokens: number;
   monthTokens: number;
   totalTokens: number;
+  longContextDayTokens?: number;
+  longContextWeekTokens?: number;
+  longContextMonthTokens?: number;
+  longContextTotalTokens?: number;
 }
 
 export interface AgentSessionAggregate {
