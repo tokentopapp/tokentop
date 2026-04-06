@@ -1,4 +1,5 @@
 import type { SessionUsageData } from "@tokentop/plugin-sdk";
+import { LONG_CONTEXT_THRESHOLD } from "../pricing/estimator.ts";
 import {
   type AgentId,
   type AgentName,
@@ -64,7 +65,33 @@ interface StreamAccumulator {
   key: StreamKey;
   tokens: TokenCounts;
   requestCount: number;
+  longContextTokens?: TokenCounts;
+  longContextRequestCount?: number;
   windowed: StreamWindowedTokens;
+}
+
+function zeroTokens(): TokenCounts {
+  return { input: 0, output: 0 };
+}
+
+function normalizeTokens(tokens: TokenCounts): TokenCounts {
+  const normalized: TokenCounts = {
+    input: tokens.input,
+    output: tokens.output,
+  };
+
+  const cacheRead = tokens.cacheRead ?? 0;
+  const cacheWrite = tokens.cacheWrite ?? 0;
+
+  if (cacheRead > 0) normalized.cacheRead = cacheRead;
+  if (cacheWrite > 0) normalized.cacheWrite = cacheWrite;
+
+  return normalized;
+}
+
+function getContextSize(tokens: TokenCounts): number {
+  // contextSize = input + cacheRead + cacheWrite — the full prompt context sent to the model
+  return tokens.input + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0);
 }
 
 export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAggregate[] {
@@ -134,21 +161,52 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     if (!stream) {
       stream = {
         key: streamKey,
-        tokens: { input: 0, output: 0 },
+        tokens: zeroTokens(),
         requestCount: 0,
         windowed: { dayTokens: 0, weekTokens: 0, monthTokens: 0, totalTokens: 0 },
       };
       session.streamMap.set(streamKeyStr, stream);
     }
 
-    stream.tokens = sumTokens(stream.tokens, row.tokens);
+    const contextSize = getContextSize(row.tokens);
+    const bucketTokens = normalizeTokens(row.tokens);
+
+    if (contextSize > LONG_CONTEXT_THRESHOLD) {
+      stream.longContextTokens = sumTokens(stream.longContextTokens ?? zeroTokens(), bucketTokens);
+      stream.longContextRequestCount = (stream.longContextRequestCount ?? 0) + 1;
+    } else {
+      stream.tokens = sumTokens(stream.tokens, bucketTokens);
+    }
+
     stream.requestCount += 1;
 
     const msgTokens = totalTokenCount(row.tokens);
     stream.windowed.totalTokens += msgTokens;
-    if (row.timestamp >= startOfDay) stream.windowed.dayTokens += msgTokens;
-    if (row.timestamp >= startOfWeek) stream.windowed.weekTokens += msgTokens;
-    if (row.timestamp >= startOfMonth) stream.windowed.monthTokens += msgTokens;
+    if (contextSize > LONG_CONTEXT_THRESHOLD) {
+      stream.windowed.longContextTotalTokens =
+        (stream.windowed.longContextTotalTokens ?? 0) + msgTokens;
+    }
+    if (row.timestamp >= startOfDay) {
+      stream.windowed.dayTokens += msgTokens;
+      if (contextSize > LONG_CONTEXT_THRESHOLD) {
+        stream.windowed.longContextDayTokens =
+          (stream.windowed.longContextDayTokens ?? 0) + msgTokens;
+      }
+    }
+    if (row.timestamp >= startOfWeek) {
+      stream.windowed.weekTokens += msgTokens;
+      if (contextSize > LONG_CONTEXT_THRESHOLD) {
+        stream.windowed.longContextWeekTokens =
+          (stream.windowed.longContextWeekTokens ?? 0) + msgTokens;
+      }
+    }
+    if (row.timestamp >= startOfMonth) {
+      stream.windowed.monthTokens += msgTokens;
+      if (contextSize > LONG_CONTEXT_THRESHOLD) {
+        stream.windowed.longContextMonthTokens =
+          (stream.windowed.longContextMonthTokens ?? 0) + msgTokens;
+      }
+    }
     if ((row.metadata?.isEstimated as boolean) === true) {
       session.hasEstimated = true;
     }
@@ -168,13 +226,24 @@ export function aggregateSessionUsage(options: AggregateOptions): AgentSessionAg
     let totalRequestCount = 0;
 
     for (const [streamKeyStr, stream] of session.streamMap) {
-      streams.push({
+      const totalStreamTokens = sumTokens(stream.tokens, stream.longContextTokens ?? zeroTokens());
+      const streamAggregate: AgentSessionStream = {
         providerId: stream.key.providerId,
         modelId: stream.key.modelId,
         tokens: stream.tokens,
         requestCount: stream.requestCount,
-      });
-      totals = sumTokens(totals, stream.tokens);
+      };
+
+      if (stream.longContextTokens) {
+        streamAggregate.longContextTokens = stream.longContextTokens;
+      }
+      if (stream.longContextRequestCount) {
+        streamAggregate.longContextRequestCount = stream.longContextRequestCount;
+        streamAggregate.hasLongContext = true;
+      }
+
+      streams.push(streamAggregate);
+      totals = sumTokens(totals, totalStreamTokens);
       totalRequestCount += stream.requestCount;
       streamWindowedTokens.set(streamKeyStr, stream.windowed);
     }
