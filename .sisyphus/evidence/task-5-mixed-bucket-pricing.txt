@@ -1,0 +1,36 @@
+Task 5 Evidence — Mixed Bucket Pricing
+Date: 2026-04-06
+
+Files changed:
+- src/agents/costing.ts
+- src/agents/costing.test.ts
+
+Summary:
+- Updated priceStream() to price base and long-context buckets separately via estimateCost() and sum both buckets.
+- Preserved conservative fallback behavior when long-context pricing fields are absent.
+- Set stream.hasLongContext when longContextRequestCount > 0.
+- Updated priceSession() windowed costs to allocate base and long-context costs with per-bucket ratios.
+- Left estimateCost() signature unchanged.
+
+Test coverage added in src/agents/costing.test.ts:
+1. Base-only stream keeps existing behavior when tiered pricing metadata exists.
+2. Long-context-only stream uses tiered pricing.
+3. Mixed stream sums base and long-context buckets.
+4. Long-context stream without tiered pricing uses base rates conservatively.
+5. Empty long-context bucket avoids NaN/errors.
+6. Windowed session costs use per-bucket ratios instead of blended ratios.
+7. Multi-stream session handles mixed tiered and non-tiered long-context pricing.
+
+Verification results:
+- bun test src/agents/costing.test.ts -> PASS (16 pass, 0 fail)
+- lsp_diagnostics src/agents/costing.ts -> clean
+- lsp_diagnostics src/agents/costing.test.ts -> clean
+- bun run typecheck -> PASS
+- bun run lint -> PASS (repo has existing warnings only; no lint errors)
+- bun test -> PASS (158 pass, 0 fail)
+- bun run build -> PASS
+
+Notable behavior checks:
+- Mixed stream pricing now equals base bucket cost + long-context bucket cost.
+- If pricing has no longContext* fields, long-context tokens are priced at base rates.
+- Windowed costs are derived per bucket: base ratios use totalTokens, long-context ratios use longContextTotalTokens.
