@@ -158,6 +158,16 @@ export function SessionDetailsDrawer({ session, onClose: _onClose }: SessionDeta
     };
   }, [session.streams]);
 
+  const hasAnyLongContext = session.streams.some((s) => s.hasLongContext);
+  const totalLongContextRequests = session.streams.reduce(
+    (sum, s) => sum + (s.longContextRequestCount ?? 0),
+    0,
+  );
+  const totalLongContextTokens = session.streams.reduce((sum, s) => {
+    if (!s.longContextTokens) return sum;
+    return sum + s.longContextTokens.input + s.longContextTokens.output;
+  }, 0);
+
   const isMultiDay = session.lastActivityAt - session.startedAt > 24 * 60 * 60 * 1000;
   const startTimeStr = formatTimelineLabel(session.startedAt, isMultiDay);
   const endTimeStr = formatTimelineLabel(session.lastActivityAt, isMultiDay);
@@ -338,6 +348,18 @@ export function SessionDetailsDrawer({ session, onClose: _onClose }: SessionDeta
               </text>
             </box>
           )}
+
+          {hasAnyLongContext && (
+            <box flexDirection="row" height={1} marginBottom={0}>
+              <text height={1} overflow="hidden">
+                <span fg={colors.warning}>↑ Long ctx: </span>
+                <span fg={colors.text}>{totalLongContextRequests} reqs</span>
+                <span fg={colors.textMuted}> · </span>
+                <span fg={colors.text}>{formatTokens(totalLongContextTokens)} tokens</span>
+                <span fg={colors.textMuted}> at tiered rate</span>
+              </text>
+            </box>
+          )}
         </box>
 
         <box
@@ -407,11 +429,17 @@ export function SessionDetailsDrawer({ session, onClose: _onClose }: SessionDeta
                   </text>
                   <box width={10} height={1} justifyContent="flex-end">
                     <text fg={colors.textMuted}>
-                      {formatTokens(stream.tokens.input + stream.tokens.output)}
+                      {formatTokens(
+                        stream.tokens.input +
+                          stream.tokens.output +
+                          (stream.longContextTokens?.input ?? 0) +
+                          (stream.longContextTokens?.output ?? 0),
+                      )}
                     </text>
                   </box>
                   <box width={10} height={1} justifyContent="flex-end">
                     <text fg={colors.success}>{formatCost(stream.costUsd)}</text>
+                    <text fg={colors.textMuted}>{stream.hasLongContext ? "↑" : " "}</text>
                   </box>
                 </box>
               );
