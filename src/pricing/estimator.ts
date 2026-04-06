@@ -38,6 +38,11 @@ export function estimateCost(usage: TokenUsage, pricing: ModelPricing): CostBrea
   return breakdown;
 }
 
+/**
+ * @deprecated This function sums tokens before pricing, which is incompatible with
+ * tiered context-based pricing. Use per-request costing via priceStream() instead.
+ * Kept for backward compatibility — not called at runtime.
+ */
 export function estimateSessionCost(sessions: TokenUsage[], pricing: ModelPricing): CostBreakdown {
   const totals = sessions.reduce<TokenUsage>(
     (acc, session) => ({
