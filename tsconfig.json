@@ -25,7 +25,6 @@
     "noImplicitOverride": true,
 
     // Path mapping
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@plugins/*": ["./src/plugins/*"],

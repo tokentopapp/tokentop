@@ -159,6 +159,7 @@ const SessionRow = memo(function SessionRow({
   const cacheRead = session.totals.cacheRead ?? 0;
   const hasCacheData = cacheRead > 0;
   const isEstimated = session.metadata?.isEstimated === true;
+  const hasLongContext = session.streams.some((s) => s.hasLongContext === true);
   const costUsd = session.totalCostUsd ?? 0;
 
   const animatedTokens = useAnimatedValue(effectiveTokens, { durationMs: 300, precision: 0 });
@@ -271,8 +272,9 @@ const SessionRow = memo(function SessionRow({
           </span>
           <span fg={textMutedColor}>{hasCacheData ? ` ↯${formatCacheBadge(cacheRead)}` : ""}</span>
         </text>
-        <text width={8} height={1} fg={costColor} {...bgProp}>
-          {costDisplay.padStart(7)}
+        <text width={8} height={1} {...bgProp}>
+          <span fg={costColor}>{costDisplay.padStart(7)}</span>
+          <span fg={textMutedColor}>{hasLongContext ? "↑" : " "}</span>
         </text>
         <text width={14} height={1} fg={textSubtleColor} {...bgProp}>
           {projectDisplay}
@@ -329,8 +331,9 @@ const SessionRow = memo(function SessionRow({
           {hasCacheData && showCacheBadge ? ` ↯${formatCacheBadge(cacheRead)}` : ""}
         </span>
       </text>
-      <text width={7} height={1} fg={costColor} {...bgProp}>
-        {formatCostVal(costUsd).padStart(6)}
+      <text width={7} height={1} {...bgProp}>
+        <span fg={costColor}>{formatCostVal(costUsd).padStart(6)}</span>
+        <span fg={textMutedColor}>{hasLongContext ? "↑" : " "}</span>
       </text>
       <text flexGrow={1} height={1} fg={textSubtleColor} {...bgProp}>
         {projectDisplay}

@@ -8,6 +8,12 @@ interface ModelsDevCost {
   output: number;
   cache_read?: number;
   cache_write?: number;
+  context_over_200k?: {
+    input?: number;
+    output?: number;
+    cache_read?: number;
+    cache_write?: number;
+  };
 }
 
 interface ModelsDevModel {
@@ -88,6 +94,14 @@ export async function getModelPricing(
     pricing.cacheWrite = model.cost.cache_write;
   }
 
+  const lc = model.cost.context_over_200k;
+  if (lc) {
+    if (lc.input !== undefined) pricing.longContextInput = lc.input;
+    if (lc.output !== undefined) pricing.longContextOutput = lc.output;
+    if (lc.cache_read !== undefined) pricing.longContextCacheRead = lc.cache_read;
+    if (lc.cache_write !== undefined) pricing.longContextCacheWrite = lc.cache_write;
+  }
+
   return pricing;
 }
 
@@ -117,6 +131,14 @@ export async function getProviderModels(
     }
     if (model.cost.cache_write !== undefined) {
       pricing.cacheWrite = model.cost.cache_write;
+    }
+
+    const lc = model.cost.context_over_200k;
+    if (lc) {
+      if (lc.input !== undefined) pricing.longContextInput = lc.input;
+      if (lc.output !== undefined) pricing.longContextOutput = lc.output;
+      if (lc.cache_read !== undefined) pricing.longContextCacheRead = lc.cache_read;
+      if (lc.cache_write !== undefined) pricing.longContextCacheWrite = lc.cache_write;
     }
 
     result[modelId] = pricing;

@@ -1,5 +1,11 @@
 import type { ProviderUsageData } from "@tokentop/plugin-sdk";
-import type { AgentSessionAggregate, AgentSessionStream } from "@/agents/types.ts";
+import type {
+  AgentSessionAggregate,
+  AgentSessionStream,
+  StreamCostBreakdown,
+  StreamWindowedTokens,
+  TokenCounts,
+} from "@/agents/types.ts";
 import type { UsageEventInsert } from "@/storage/types.ts";
 
 /**
@@ -161,6 +167,70 @@ function hashCombine(a: number, b: number): number {
   return ((a * 2654435761) ^ (b * 1597334677)) >>> 0;
 }
 
+function roundCost(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function totalTokens(tokens: TokenCounts): number {
+  return tokens.input + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0) + tokens.output;
+}
+
+function createLongContextTokens(rng: DemoRng): TokenCounts {
+  return {
+    input: 240_000 + Math.floor(rng.range(0, 40_000)),
+    output: 4_000 + Math.floor(rng.range(0, 6_000)),
+  };
+}
+
+function createStreamCostBreakdown(
+  baseCost: number,
+  inputTokens: number,
+  outputTokens: number,
+  longContextTokens?: TokenCounts,
+): { costUsd: number; costBreakdown: StreamCostBreakdown } {
+  const baseInputCost = baseCost * 0.55;
+  const baseOutputCost = baseCost - baseInputCost;
+  const inputRate = baseInputCost / (inputTokens / 1_000_000);
+  const outputRate = baseOutputCost / (outputTokens / 1_000_000);
+
+  const longContextInputCost = longContextTokens
+    ? (longContextTokens.input / 1_000_000) * inputRate * 2
+    : 0;
+  const longContextOutputCost = longContextTokens
+    ? (longContextTokens.output / 1_000_000) * outputRate * 2
+    : 0;
+  const total = baseCost + longContextInputCost + longContextOutputCost;
+
+  return {
+    costUsd: roundCost(total),
+    costBreakdown: {
+      total: roundCost(total),
+      input: roundCost(baseInputCost + longContextInputCost),
+      output: roundCost(baseOutputCost + longContextOutputCost),
+    },
+  };
+}
+
+function createWindowedTokens(
+  inputTokens: number,
+  outputTokens: number,
+  longContextTokens?: TokenCounts,
+): StreamWindowedTokens {
+  const baseTotalTokens = totalTokens({ input: inputTokens, output: outputTokens });
+  const longContextTotalTokens = longContextTokens ? totalTokens(longContextTokens) : 0;
+
+  return {
+    dayTokens: baseTotalTokens,
+    weekTokens: baseTotalTokens,
+    monthTokens: baseTotalTokens,
+    totalTokens: baseTotalTokens,
+    ...(longContextTotalTokens > 0 ? { longContextDayTokens: longContextTotalTokens } : {}),
+    ...(longContextTotalTokens > 0 ? { longContextWeekTokens: longContextTotalTokens } : {}),
+    ...(longContextTotalTokens > 0 ? { longContextMonthTokens: longContextTotalTokens } : {}),
+    ...(longContextTotalTokens > 0 ? { longContextTotalTokens } : {}),
+  };
+}
+
 class DemoRng {
   private seed: number;
   private initialSeed: number;
@@ -238,21 +308,44 @@ export class DemoSimulator {
       ...inactiveSessions.slice(0, inactiveCount),
     ];
 
+    const longContextSessionIndexes = this.pickLongContextSessionIndexes(selectedSessions);
+
     this.sessions = selectedSessions.map((seedSession, index) => {
       const tokens = seedSession.baseTokens;
-      const cost = seedSession.baseCost;
       const inputTokens = Math.floor(tokens * 0.6);
       const outputTokens = tokens - inputTokens;
-      const streams: AgentSessionStream[] = [
-        {
-          providerId: seedSession.providerId,
-          modelId: seedSession.modelId,
-          tokens: { input: inputTokens, output: outputTokens },
-          requestCount: Math.max(1, Math.floor(tokens / 800)),
-          costUsd: cost,
-          pricingSource: "fallback",
-        },
-      ];
+      const hasLongContext = longContextSessionIndexes.has(index);
+      const longContextTokens = hasLongContext
+        ? createLongContextTokens(this.rng.fork(hashCombine(index + 1, seedSession.baseTokens)))
+        : undefined;
+      const { costUsd, costBreakdown } = createStreamCostBreakdown(
+        seedSession.baseCost,
+        inputTokens,
+        outputTokens,
+        longContextTokens,
+      );
+      const streamWindowedTokens = createWindowedTokens(
+        inputTokens,
+        outputTokens,
+        longContextTokens,
+      );
+      const requestCount = Math.max(1, Math.floor(tokens / 800));
+      const longContextRequestCount = hasLongContext ? 1 : 0;
+      const stream: AgentSessionStream = {
+        providerId: seedSession.providerId,
+        modelId: seedSession.modelId,
+        tokens: { input: inputTokens, output: outputTokens },
+        requestCount: requestCount + longContextRequestCount,
+        costUsd,
+        costBreakdown,
+        pricingSource: "fallback",
+      };
+      if (hasLongContext && longContextTokens) {
+        stream.longContextTokens = longContextTokens;
+        stream.longContextRequestCount = longContextRequestCount;
+        stream.hasLongContext = true;
+      }
+      const streams: AgentSessionStream[] = [stream];
 
       const isInactive = seedSession.inactive ?? false;
       const startedAt = isInactive
@@ -276,9 +369,9 @@ export class DemoSimulator {
       ).getTime();
       const startOfMonth = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1).getTime();
 
-      const costInDay = lastActivityAt >= startOfDay ? cost : 0;
-      const costInWeek = lastActivityAt >= startOfWeek ? cost : 0;
-      const costInMonth = lastActivityAt >= startOfMonth ? cost : 0;
+      const costInDay = lastActivityAt >= startOfDay ? costUsd : 0;
+      const costInWeek = lastActivityAt >= startOfWeek ? costUsd : 0;
+      const costInMonth = lastActivityAt >= startOfMonth ? costUsd : 0;
 
       const baseSession: Omit<AgentSessionAggregate, "endedAt"> = {
         sessionId: seedSession.sessionId,
@@ -289,17 +382,20 @@ export class DemoSimulator {
         lastActivityAt,
         status: isInactive ? "idle" : index % 3 === 0 ? "idle" : "active",
         totals: {
-          input: inputTokens,
-          output: outputTokens,
+          input: hasLongContext ? inputTokens + (longContextTokens?.input ?? 0) : inputTokens,
+          output: hasLongContext ? outputTokens + (longContextTokens?.output ?? 0) : outputTokens,
           cacheRead: Math.floor(tokens * 0.05),
           cacheWrite: Math.floor(tokens * 0.02),
         },
-        totalCostUsd: cost,
-        requestCount: Math.max(1, Math.floor(tokens / 700)),
+        totalCostUsd: costUsd,
+        requestCount: requestCount + longContextRequestCount,
         streams,
         costInDay,
         costInWeek,
         costInMonth,
+        _streamWindowedTokens: new Map([
+          [`${seedSession.providerId}::${seedSession.modelId}`, streamWindowedTokens],
+        ]),
       };
       if (seedSession.sessionName) {
         baseSession.sessionName = seedSession.sessionName;
@@ -317,6 +413,29 @@ export class DemoSimulator {
     this.providerUsage = new Map();
     this.lastTick = now;
     this.initializeProviderUsage(now);
+  }
+
+  private pickLongContextSessionIndexes(selectedSessions: DemoSessionSeed[]): Set<number> {
+    if (this.preset === "light") {
+      return new Set();
+    }
+
+    const activeIndexes = selectedSessions
+      .map((session, index) => ({ session, index }))
+      .filter(({ session }) => !(session.inactive ?? false))
+      .map(({ index }) => index);
+
+    const targetCount = this.preset === "normal" ? 1 : Math.min(2, activeIndexes.length);
+    const ranked = activeIndexes
+      .map((index) => ({
+        index,
+        score: this.rng
+          .fork(hashCombine(1_000 + index, selectedSessions[index]!.baseTokens))
+          .next(),
+      }))
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+
+    return new Set(ranked.slice(0, targetCount).map(({ index }) => index));
   }
 
   private initializeProviderUsage(now: number) {

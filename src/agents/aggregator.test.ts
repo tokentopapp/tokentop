@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { SessionUsageData } from "@tokentop/plugin-sdk";
 import { aggregateSessionUsage, deduplicateAggregates } from "./aggregator.ts";
 import type { AgentSessionAggregate } from "./types.ts";
 
@@ -201,7 +202,40 @@ describe("deduplicateAggregates", () => {
 // aggregateSessionUsage — basic sanity
 // ---------------------------------------------------------------------------
 describe("aggregateSessionUsage", () => {
-  const NOW = Date.now();
+  const NOW = new Date(2026, 3, 15, 12, 0, 0, 0).getTime();
+
+  function makeUsageRow(
+    overrides: Partial<SessionUsageData> &
+      Pick<SessionUsageData, "sessionId" | "tokens" | "timestamp">,
+  ): SessionUsageData {
+    return {
+      providerId: "anthropic",
+      modelId: "claude-sonnet-4",
+      ...overrides,
+    };
+  }
+
+  function aggregateSingleSession(rows: SessionUsageData[]) {
+    const result = aggregateSessionUsage({
+      agentId: "test",
+      agentName: "Test",
+      now: NOW,
+      rows,
+    });
+
+    expect(result).toHaveLength(1);
+    return result[0]!;
+  }
+
+  function getOnlyStream(rows: SessionUsageData[]) {
+    const session = aggregateSingleSession(rows);
+    expect(session.streams).toHaveLength(1);
+    return {
+      session,
+      stream: session.streams[0]!,
+      windowed: session._streamWindowedTokens?.get("anthropic::claude-sonnet-4"),
+    };
+  }
 
   test("groups rows by sessionId", () => {
     const result = aggregateSessionUsage({
@@ -302,5 +336,239 @@ describe("aggregateSessionUsage", () => {
     const idle = result.find((r) => r.sessionId === "idle");
     expect(active!.status).toBe("active");
     expect(idle!.status).toBe("idle");
+  });
+
+  test("keeps all requests in the base bucket when every request is at or under 200K context", () => {
+    const { stream, session, windowed } = getOnlyStream([
+      makeUsageRow({ sessionId: "s1", timestamp: NOW, tokens: { input: 120_000, output: 1_000 } }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 1_000,
+        tokens: { input: 80_000, output: 2_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 2_000,
+        tokens: { input: 200_000, output: 3_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 400_000, output: 6_000 });
+    expect(stream.longContextTokens).toBeUndefined();
+    expect(stream.longContextRequestCount).toBeUndefined();
+    expect(stream.hasLongContext).toBeUndefined();
+    expect(session.totals).toEqual({ input: 400_000, output: 6_000 });
+    expect(windowed).toEqual({
+      dayTokens: 406_000,
+      weekTokens: 406_000,
+      monthTokens: 406_000,
+      totalTokens: 406_000,
+    });
+  });
+
+  test("moves all requests into long-context bucket when every request exceeds 200K context", () => {
+    const { stream, windowed } = getOnlyStream([
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW,
+        tokens: { input: 210_000, output: 1_000, cacheRead: 5_000, cacheWrite: 2_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 1_000,
+        tokens: { input: 220_000, output: 2_000, cacheRead: 10_000, cacheWrite: 4_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 0, output: 0 });
+    expect(stream.requestCount).toBe(2);
+    expect(stream.longContextTokens).toEqual({
+      input: 430_000,
+      output: 3_000,
+      cacheRead: 15_000,
+      cacheWrite: 6_000,
+    });
+    expect(stream.longContextRequestCount).toBe(2);
+    expect(stream.hasLongContext).toBe(true);
+    expect(windowed).toEqual({
+      dayTokens: 454_000,
+      weekTokens: 454_000,
+      monthTokens: 454_000,
+      totalTokens: 454_000,
+      longContextDayTokens: 454_000,
+      longContextWeekTokens: 454_000,
+      longContextMonthTokens: 454_000,
+      longContextTotalTokens: 454_000,
+    });
+  });
+
+  test("splits mixed requests into base and long-context buckets", () => {
+    const { stream } = getOnlyStream([
+      makeUsageRow({ sessionId: "s1", timestamp: NOW, tokens: { input: 100_000, output: 1_000 } }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 1_000,
+        tokens: { input: 120_000, output: 2_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 2_000,
+        tokens: { input: 180_000, output: 3_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 3_000,
+        tokens: { input: 210_000, output: 4_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 4_000,
+        tokens: { input: 190_000, output: 5_000, cacheRead: 20_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 400_000, output: 6_000 });
+    expect(stream.longContextTokens).toEqual({ input: 400_000, output: 9_000, cacheRead: 20_000 });
+    expect(stream.requestCount).toBe(5);
+    expect(stream.longContextRequestCount).toBe(2);
+    expect(stream.hasLongContext).toBe(true);
+  });
+
+  test("treats exactly 200,000 context tokens as base bucket", () => {
+    const { stream, windowed } = getOnlyStream([
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW,
+        tokens: { input: 150_000, output: 7_000, cacheRead: 30_000, cacheWrite: 20_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({
+      input: 150_000,
+      output: 7_000,
+      cacheRead: 30_000,
+      cacheWrite: 20_000,
+    });
+    expect(stream.longContextTokens).toBeUndefined();
+    expect(stream.longContextRequestCount).toBeUndefined();
+    expect(stream.hasLongContext).toBeUndefined();
+    expect(windowed?.longContextTotalTokens).toBeUndefined();
+  });
+
+  test("moves 200,001 context tokens into long-context bucket", () => {
+    const { stream, windowed } = getOnlyStream([
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW,
+        tokens: { input: 150_000, output: 7_000, cacheRead: 30_001, cacheWrite: 20_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 0, output: 0 });
+    expect(stream.longContextTokens).toEqual({
+      input: 150_000,
+      output: 7_000,
+      cacheRead: 30_001,
+      cacheWrite: 20_000,
+    });
+    expect(stream.longContextRequestCount).toBe(1);
+    expect(stream.hasLongContext).toBe(true);
+    expect(windowed?.longContextTotalTokens).toBe(207_001);
+  });
+
+  test("uses cache tokens when cache-only growth crosses the threshold", () => {
+    const { stream } = getOnlyStream([
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW,
+        tokens: { input: 50_000, output: 1_000, cacheRead: 180_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 0, output: 0 });
+    expect(stream.longContextTokens).toEqual({ input: 50_000, output: 1_000, cacheRead: 180_000 });
+    expect(stream.longContextRequestCount).toBe(1);
+  });
+
+  test("treats missing cacheRead and cacheWrite as zero when computing context size", () => {
+    const { stream } = getOnlyStream([
+      makeUsageRow({ sessionId: "s1", timestamp: NOW, tokens: { input: 199_999, output: 1_000 } }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 1_000,
+        tokens: { input: 200_001, output: 2_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 199_999, output: 1_000 });
+    expect(stream.longContextTokens).toEqual({ input: 200_001, output: 2_000 });
+    expect(stream.longContextRequestCount).toBe(1);
+  });
+
+  test("splits windowed tokens correctly between total and long-context buckets", () => {
+    const { windowed } = getOnlyStream([
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 1_000,
+        tokens: { input: 210_000, output: 1_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 60 * 60 * 1000,
+        tokens: { input: 90_000, output: 2_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 2 * 24 * 60 * 60 * 1000,
+        tokens: { input: 205_000, output: 3_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 10 * 24 * 60 * 60 * 1000,
+        tokens: { input: 80_000, output: 4_000 },
+      }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: new Date(
+          new Date(NOW).getFullYear(),
+          new Date(NOW).getMonth() - 1,
+          15,
+        ).getTime(),
+        tokens: { input: 220_000, output: 5_000 },
+      }),
+    ]);
+
+    expect(windowed).toEqual({
+      dayTokens: 303_000,
+      weekTokens: 511_000,
+      monthTokens: 595_000,
+      totalTokens: 820_000,
+      longContextDayTokens: 211_000,
+      longContextWeekTokens: 419_000,
+      longContextMonthTokens: 419_000,
+      longContextTotalTokens: 644_000,
+    });
+  });
+
+  test("does not produce division-by-zero or NaN artifacts when every request is long-context", () => {
+    const { stream, session, windowed } = getOnlyStream([
+      makeUsageRow({ sessionId: "s1", timestamp: NOW, tokens: { input: 300_000, output: 5_000 } }),
+      makeUsageRow({
+        sessionId: "s1",
+        timestamp: NOW - 1_000,
+        tokens: { input: 250_000, output: 6_000 },
+      }),
+    ]);
+
+    expect(stream.tokens).toEqual({ input: 0, output: 0 });
+    expect(stream.longContextTokens).toEqual({ input: 550_000, output: 11_000 });
+    expect(stream.longContextRequestCount).toBe(2);
+    expect(stream.hasLongContext).toBe(true);
+    expect(Number.isNaN(stream.tokens.input)).toBe(false);
+    expect(Number.isNaN(stream.tokens.output)).toBe(false);
+    expect(Number.isNaN(session.totals.input)).toBe(false);
+    expect(Number.isNaN(session.totals.output)).toBe(false);
+    expect(Number.isNaN(windowed!.totalTokens)).toBe(false);
+    expect(Number.isNaN(windowed!.longContextTotalTokens!)).toBe(false);
   });
 });

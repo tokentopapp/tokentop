@@ -68,5 +68,10 @@ export function clearPricingCache(): void {
 }
 
 export type { TokenUsage } from "./estimator.ts";
+/**
+ * @deprecated This function sums tokens before pricing, which is incompatible with
+ * tiered context-based pricing. Use per-request costing via priceStream() instead.
+ * Kept for backward compatibility — not called at runtime.
+ */
 export { estimateCost, estimateSessionCost, formatCost, formatTokenCount } from "./estimator.ts";
 export { FALLBACK_PRICING } from "./fallback.ts";

@@ -68,6 +68,9 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
   const { windowMs } = useTimeWindow();
   const hasBackfilled = useRef(false);
   const isRefreshingRef = useRef(false);
+  // Bugfix: track first completed load separately so an empty 1h window does not
+  // keep re-entering the initial loading state forever.
+  const hasLoadedOnceRef = useRef(false);
   const lastFingerprintRef = useRef<string>("");
 
   const discoverAgents = useCallback(async (): Promise<AgentInfo[]> => {
@@ -134,7 +137,7 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
       if (isRefreshingRef.current) return;
       isRefreshingRef.current = true;
 
-      const isInitialLoad = sessions.length === 0;
+      const isInitialLoad = !hasLoadedOnceRef.current;
       if (isInitialLoad) {
         setIsLoading(true);
       }
@@ -275,6 +278,7 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
         isRefreshingRef.current = false;
         if (isInitialLoad) {
           setIsLoading(false);
+          hasLoadedOnceRef.current = true;
         }
       }
     },

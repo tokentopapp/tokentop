@@ -41,7 +41,7 @@
     "@tokentop/agent-cursor": "^1.2.0",
     "@tokentop/agent-gemini": "^1.0.0",
     "@tokentop/agent-opencode": "^1.0.0",
-    "@tokentop/plugin-sdk": "^1.4.0",
+    "@tokentop/plugin-sdk": "^1.5.0",
     "react": "^19.0.0",
     "react-devtools-core": "^7.0.1",
     "zod": "^4.0.0"
