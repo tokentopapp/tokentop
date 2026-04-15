@@ -150,6 +150,8 @@ function createMinimaxPlugin(id: string, name: string): ProviderPlugin {
 
         if (!response.ok) {
           log.warn("Failed to fetch MiniMax usage", { status: response.status });
+          // Drain the response body to prevent memory leaks in Bun's fetch implementation
+          response.body?.cancel();
 
           if (response.status === 429) {
             const retryAfterHeader = response.headers.get("retry-after");

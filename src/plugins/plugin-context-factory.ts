@@ -39,13 +39,21 @@ export function createPluginContext(
   permissions: PluginPermissions,
   signal?: AbortSignal,
 ): PluginContext {
+  // Lazily create the AbortSignal only when accessed to avoid accumulating
+  // dangling 30s timers from AbortSignal.timeout() on every context creation.
+  let _signal = signal;
   const ctx: PluginContext = {
     config: {},
     logger: createPluginLogger(pluginId),
     http: createSandboxedHttpClient(pluginId, permissions),
     authSources: createAuthSources(pluginId, permissions),
     storage: createPluginStorage(pluginId),
-    signal: signal ?? AbortSignal.timeout(30_000),
+    get signal() {
+      if (!_signal) {
+        _signal = AbortSignal.timeout(30_000);
+      }
+      return _signal;
+    },
   };
   deepFreeze(ctx.config);
   return ctx;

@@ -106,6 +106,7 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
     return discovered;
   }, []);
 
+  const sessionParseSignal = useRef(AbortSignal.timeout(120_000));
   const fetchAgentSessions = useCallback(
     async (plugin: AgentPlugin, options: SessionParseOptions): Promise<AgentSessionAggregate[]> => {
       const agentId = plugin.id;
@@ -113,7 +114,7 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
 
       const http = createSandboxedHttpClient(plugin.id, plugin.permissions);
       const logger = createPluginLogger(plugin.id);
-      const ctx = { http, logger, config: {}, signal: AbortSignal.timeout(60_000) };
+      const ctx = { http, logger, config: {}, signal: sessionParseSignal.current };
 
       const rawSessions = await plugin.parseSessions(options, ctx);
 

@@ -134,6 +134,9 @@ export const githubCopilotPlugin: ProviderPlugin = {
       });
 
       if (!response.ok) {
+        // Drain the response body to prevent memory leaks in Bun's fetch implementation
+        response.body?.cancel();
+
         if (response.status === 429) {
           const retryAfterHeader = response.headers.get("retry-after");
           const parsedRetryAfter = retryAfterHeader

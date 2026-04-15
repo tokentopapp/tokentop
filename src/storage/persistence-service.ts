@@ -36,6 +36,12 @@ import { computeStreamDelta } from "./types.ts";
 /** Minimum interval between DB writes for the same session */
 const SNAPSHOT_INTERVAL_MS = 300_000; // 5 minutes
 
+/** Remove tracking entries for sessions not written in this window */
+const STALE_ENTRY_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/** Run eviction at most this often */
+const EVICTION_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
 // ---------------------------------------------------------------------------
 // Global state (survives bun --hot HMR and React remounts)
 // ---------------------------------------------------------------------------
@@ -49,6 +55,8 @@ interface PersistenceState {
   previousStreamTotals: Map<string, StreamTotals>;
   /** Whether startup seeding has completed */
   seeded: boolean;
+  /** Timestamp of last stale entry eviction run */
+  lastEvictionAt: number;
 }
 
 declare global {
@@ -63,6 +71,7 @@ function getState(): PersistenceState {
       sessionFingerprints: new Map(),
       previousStreamTotals: new Map(),
       seeded: false,
+      lastEvictionAt: 0,
     };
   }
   return globalThis.__tokentopPersistence;
@@ -91,6 +100,27 @@ export interface SessionPersistData {
   streams: Omit<AgentSessionStreamSnapshotRow, "agentSessionSnapshotId">[];
 }
 
+function evictStaleEntries(state: PersistenceState, now: number): void {
+  if (now - state.lastEvictionAt < EVICTION_INTERVAL_MS) return;
+  state.lastEvictionAt = now;
+
+  const cutoff = now - STALE_ENTRY_MAX_AGE_MS;
+  for (const [key, ts] of state.lastWriteTimestamps) {
+    if (ts < cutoff) {
+      state.lastWriteTimestamps.delete(key);
+      state.sessionFingerprints.delete(key);
+    }
+  }
+
+  // Evict stream totals whose parent session was evicted
+  for (const streamKey of state.previousStreamTotals.keys()) {
+    const sessionKey = streamKey.slice(0, streamKey.indexOf(":", streamKey.indexOf(":") + 1));
+    if (!state.lastWriteTimestamps.has(sessionKey)) {
+      state.previousStreamTotals.delete(streamKey);
+    }
+  }
+}
+
 /**
  * Persist session data to the database with per-session throttling.
  *
@@ -105,6 +135,7 @@ export function persistSessions(sessions: SessionPersistData[]): number {
 
   const state = getState();
   const now = Date.now();
+  evictStaleEntries(state, now);
   let persistedCount = 0;
 
   for (const { session, snapshot, streams } of sessions) {

@@ -123,6 +123,8 @@ export const zaiCodingPlanPlugin: ProviderPlugin = {
 
       if (!response.ok) {
         log.warn("Failed to fetch Z.ai usage", { status: response.status });
+        // Drain the response body to prevent memory leaks in Bun's fetch implementation
+        response.body?.cancel();
 
         if (response.status === 429) {
           const retryAfterHeader = response.headers.get("retry-after");
