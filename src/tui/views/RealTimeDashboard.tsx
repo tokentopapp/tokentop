@@ -469,7 +469,10 @@ export function RealTimeDashboard() {
     }
   };
 
-  const activeCount = agentSessions.filter((s) => s.status === "active").length;
+  const activeCount = useMemo(
+    () => agentSessions.reduce((n, s) => (s.status === "active" ? n + 1 : n), 0),
+    [agentSessions],
+  );
 
   return (
     <box flexDirection="column" flexGrow={1} padding={1} gap={1} overflow="hidden">
