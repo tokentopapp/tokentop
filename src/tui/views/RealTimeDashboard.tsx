@@ -551,6 +551,8 @@ export function RealTimeDashboard() {
           ref={sessionsScrollboxRef}
           sessions={processedSessions}
           selectedRow={selectedRow}
+          scrollOffset={scrollOffset}
+          visibleRows={visibleRows}
           isLoading={isLoading}
           isFiltering={isFiltering}
           filterQuery={filterQuery}

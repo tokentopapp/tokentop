@@ -13,6 +13,8 @@ import { getSortDirectionIndicator, getSortFieldLabel } from "../types/sort.ts";
 interface SessionsTableProps {
   sessions: AgentSessionAggregate[];
   selectedRow: number;
+  scrollOffset: number;
+  visibleRows: number;
   isLoading: boolean;
   isFiltering: boolean;
   filterQuery: string;
@@ -354,6 +356,8 @@ export const SessionsTable = forwardRef(function SessionsTable(
   {
     sessions,
     selectedRow,
+    scrollOffset,
+    visibleRows,
     isLoading,
     isFiltering,
     filterQuery,
@@ -401,9 +405,17 @@ export const SessionsTable = forwardRef(function SessionsTable(
     bulkThreshold: 100,
   });
 
-  let activeIndex = 0;
   const selectedSession = sessions[selectedRow] ?? null;
   const inspector = selectedSession ? getInspectorData(selectedSession) : null;
+
+  // Spacer boxes preserve scrollbox inner height so scrollTo(scrollOffset) still maps correctly.
+  const RENDER_BUFFER = 4;
+  const visibleStart = Math.max(0, scrollOffset - RENDER_BUFFER);
+  const visibleEnd = Math.min(animatedSessions.length, scrollOffset + visibleRows + RENDER_BUFFER);
+  const visibleSlice =
+    animatedSessions.length > 0 ? animatedSessions.slice(visibleStart, visibleEnd) : [];
+  const topSpacer = visibleStart;
+  const bottomSpacer = Math.max(0, animatedSessions.length - visibleEnd);
 
   // Sort indicator helpers for column headers
   const sortIndicator = (field: string) =>
@@ -530,8 +542,10 @@ export const SessionsTable = forwardRef(function SessionsTable(
               </text>
             </box>
           )}
-          {animatedSessions.map((entry) => {
-            const isSelectedRow = !entry.isExiting && activeIndex++ === selectedRow;
+          {topSpacer > 0 && <box height={topSpacer} flexShrink={0} />}
+          {visibleSlice.map((entry, i) => {
+            const absIndex = visibleStart + i;
+            const isSelectedRow = !entry.isExiting && absIndex === selectedRow;
             return (
               <SessionRow
                 key={entry.item.sessionId}
@@ -547,6 +561,7 @@ export const SessionsTable = forwardRef(function SessionsTable(
               />
             );
           })}
+          {bottomSpacer > 0 && <box height={bottomSpacer} flexShrink={0} />}
         </box>
       </scrollbox>
       {terminalHeight >= 30 && (
