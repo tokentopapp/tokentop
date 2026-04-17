@@ -8,7 +8,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { aggregateSessionUsage, deduplicateAggregates } from "@/agents/aggregator.ts";
+import {
+  aggregateSessionUsage,
+  deduplicateAggregates,
+  deduplicateCrossAgent,
+} from "@/agents/aggregator.ts";
 import { priceSessions } from "@/agents/costing.ts";
 import type { AgentId, AgentInfo, AgentSessionAggregate } from "@/agents/types.ts";
 import { createPluginContext } from "@/plugins/plugin-context-factory.ts";
@@ -106,7 +110,6 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
     return discovered;
   }, []);
 
-  const sessionParseSignal = useRef(AbortSignal.timeout(120_000));
   const fetchAgentSessions = useCallback(
     async (plugin: AgentPlugin, options: SessionParseOptions): Promise<AgentSessionAggregate[]> => {
       const agentId = plugin.id;
@@ -114,7 +117,17 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
 
       const http = createSandboxedHttpClient(plugin.id, plugin.permissions);
       const logger = createPluginLogger(plugin.id);
-      const ctx = { http, logger, config: {}, signal: sessionParseSignal.current };
+      // Lazy signal: only create the 120s timer if the plugin actually reads ctx.signal.
+      let parseSignal: AbortSignal | undefined;
+      const ctx = {
+        http,
+        logger,
+        config: {},
+        get signal(): AbortSignal {
+          if (!parseSignal) parseSignal = AbortSignal.timeout(120_000);
+          return parseSignal;
+        },
+      };
 
       const rawSessions = await plugin.parseSessions(options, ctx);
 
@@ -225,11 +238,13 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
           return;
         }
 
+        const finalSessions = deduplicateCrossAgent(pricedSessions);
+
         // Persist to storage — the persistence service handles throttling
         // internally (fingerprint gate + 5-minute per-session throttle).
         // Safe to call every tick; state lives on globalThis, survives HMR.
         const now = Date.now();
-        const persistData = pricedSessions.map((session) => ({
+        const persistData = finalSessions.map((session) => ({
           session: {
             agentId: session.agentId,
             sessionId: session.sessionId,
@@ -262,15 +277,15 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
         }));
         const persistedCount = persistSessions(persistData);
         debug(
-          `Persisted ${persistedCount}/${pricedSessions.length} sessions to storage`,
+          `Persisted ${persistedCount}/${finalSessions.length} sessions to storage`,
           undefined,
           "agent-sessions",
         );
 
-        setSessions(pricedSessions);
+        setSessions(finalSessions);
         setLastRefreshAt(Date.now());
 
-        debug(`Session refresh complete`, { count: pricedSessions.length }, "agent-sessions");
+        debug(`Session refresh complete`, { count: finalSessions.length }, "agent-sessions");
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Unknown error";
         logError(`Session refresh failed: ${errorMsg}`, undefined, "agent-sessions");

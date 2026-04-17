@@ -360,19 +360,25 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
 
         const http = createSandboxedHttpClient(providerId, state.plugin.permissions);
         const logger = createPluginLogger(providerId);
+        // Lazy signal: only create the 30s timer if a plugin actually reads ctx.signal.
+        let fetchSignal: AbortSignal | undefined;
+        const fetchCtx = {
+          credentials: creds,
+          http,
+          logger,
+          config: {},
+          get signal(): AbortSignal {
+            if (!fetchSignal) fetchSignal = AbortSignal.timeout(30_000);
+            return fetchSignal;
+          },
+        };
 
         const fetchResult = await safeInvoke(
           providerId,
           "fetchUsage",
           () =>
             runInPluginGuard(providerId, state.plugin.permissions, () =>
-              state.plugin.fetchUsage({
-                credentials: creds,
-                http,
-                logger,
-                config: {},
-                signal: AbortSignal.timeout(30_000),
-              }),
+              state.plugin.fetchUsage(fetchCtx),
             ),
           {
             // Count non-rate-limit errors as circuit breaker failures.
