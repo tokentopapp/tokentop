@@ -160,7 +160,9 @@ export function RealTimeDashboard() {
   );
 
   const baseFilteredSessions = useMemo(() => {
-    let result = [...agentSessions];
+    if (windowMs === null && !filterQuery) return agentSessions;
+
+    let result = agentSessions;
 
     if (windowMs !== null) {
       const cutoff = Date.now() - windowMs;
