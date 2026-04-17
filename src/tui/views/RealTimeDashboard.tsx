@@ -255,8 +255,10 @@ export function RealTimeDashboard() {
     return result;
   }, [baseFilteredSessions, activeDriverFilter, driverDimension, sortField, sortDirection]);
 
-  // Stabilize selection across re-sorts: track selected session by ID
-  // so the highlight follows the same session when live data causes reordering.
+  // A keypress and a refresh tick can batch into one render; if they do,
+  // `prev` may be the user's new row while `selectedSessionIdRef` is still
+  // the session they moved *from*. Trusting `prev` when it resolves to a
+  // valid session prevents a snap-back bounce.
   useLayoutEffect(() => {
     if (processedSessions.length === 0) {
       setSelectedRow(0);
@@ -265,24 +267,40 @@ export function RealTimeDashboard() {
       return;
     }
 
-    if (selectedSessionIdRef.current) {
-      const newIndex = processedSessions.findIndex(
-        (s) => s.sessionId === selectedSessionIdRef.current,
-      );
-      if (newIndex !== -1) {
-        setSelectedRow(newIndex);
-        return;
-      }
-      // Tracked session was filtered out — fall through to clamp
-      selectedSessionIdRef.current = null;
-    }
+    setSelectedRow((prev) => {
+      const currentSession = processedSessions[prev];
 
-    // Clamp to valid range (functional update avoids selectedRow in deps)
-    setSelectedRow((prev) => Math.min(prev, processedSessions.length - 1));
+      if (currentSession) {
+        if (currentSession.sessionId === selectedSessionIdRef.current) {
+          return prev;
+        }
+        if (selectedSessionIdRef.current) {
+          const trackedIndex = processedSessions.findIndex(
+            (s) => s.sessionId === selectedSessionIdRef.current,
+          );
+          if (trackedIndex !== -1 && trackedIndex !== prev) {
+            return trackedIndex;
+          }
+        }
+        selectedSessionIdRef.current = currentSession.sessionId;
+        return prev;
+      }
+
+      if (selectedSessionIdRef.current) {
+        const trackedIndex = processedSessions.findIndex(
+          (s) => s.sessionId === selectedSessionIdRef.current,
+        );
+        if (trackedIndex !== -1) return trackedIndex;
+        selectedSessionIdRef.current = null;
+      }
+
+      const clamped = Math.min(prev, processedSessions.length - 1);
+      selectedSessionIdRef.current = processedSessions[clamped]?.sessionId ?? null;
+      return clamped;
+    });
   }, [processedSessions, setScrollOffset]);
 
-  // Record which session the user selected (runs after navigation and stabilization)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = processedSessions[selectedRow];
     if (session) {
       selectedSessionIdRef.current = session.sessionId;
