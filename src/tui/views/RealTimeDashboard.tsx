@@ -1,6 +1,15 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { notificationBus } from "@/plugins/notification-bus.ts";
 import { classifyProviderError } from "@/utils/error-category.ts";
 import { HelpOverlay } from "../components/HelpOverlay.tsx";
@@ -20,6 +29,7 @@ import { useDashboardKeyboard } from "../hooks/useDashboardKeyboard.ts";
 import type { SortDirection, SortField } from "../types/sort.ts";
 import { SORT_FIELDS } from "../types/sort.ts";
 import { getProviderColor } from "../utils/providerColor.ts";
+import { computeScrollOffset } from "../utils/scrollFollow.ts";
 
 export function RealTimeDashboard() {
   const colors = useColors();
@@ -77,7 +87,13 @@ export function RealTimeDashboard() {
   const { showDrawer, isOpen: showSessionDrawer } = useDrawer();
 
   const [showHelp, setShowHelp] = useState(false);
-  const [selectedRow, setSelectedRow] = useState(0);
+  // Cursor and scroll offset share one state so batched j-presses advance
+  // both in lockstep — see setSelectedRow below.
+  const [nav, setNav] = useState<{ selectedRow: number; scrollOffset: number }>({
+    selectedRow: 0,
+    scrollOffset: 0,
+  });
+  const { selectedRow, scrollOffset } = nav;
   const [focusedPanel, setFocusedPanel] = useState<"sessions" | "sidebar" | "limits">("sessions");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(config.display.sidebarCollapsed);
   const [filterQuery, setFilterQuery] = useState("");
@@ -86,12 +102,7 @@ export function RealTimeDashboard() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [showSortOverlay, setShowSortOverlay] = useState(false);
   const [pendingG, setPendingG] = useState(false);
-  const scrollOffsetRef = useRef(0);
   const selectedSessionIdRef = useRef<string | null>(null);
-  const setScrollOffset = useCallback((val: number) => {
-    scrollOffsetRef.current = val;
-    sessionsScrollboxRef.current?.scrollTo(val);
-  }, []);
   const [limitSelectedIndex, setLimitSelectedIndex] = useState(0);
   const [driverDimension, setDriverDimension] = useState<DriverDimension>("model");
   const [selectedDriverIndex, setSelectedDriverIndex] = useState(0);
@@ -101,6 +112,32 @@ export function RealTimeDashboard() {
   const showBudgetInLimits = sidebarMode === "hidden";
 
   const sessionsScrollboxRef = useRef<ScrollBoxRenderable>(null);
+
+  const visibleRowsRef = useRef(visibleRows);
+  visibleRowsRef.current = visibleRows;
+  const sessionsLengthRef = useRef(0);
+
+  const setSelectedRow = useCallback<Dispatch<SetStateAction<number>>>((arg) => {
+    setNav((prev) => {
+      const next = typeof arg === "function" ? arg(prev.selectedRow) : arg;
+      const clamped = Math.max(0, next);
+      const newOffset = computeScrollOffset(
+        clamped,
+        prev.scrollOffset,
+        visibleRowsRef.current,
+        sessionsLengthRef.current,
+      );
+      if (clamped === prev.selectedRow && newOffset === prev.scrollOffset) return prev;
+      return { selectedRow: clamped, scrollOffset: newOffset };
+    });
+  }, []);
+
+  const setScrollOffset = useCallback((val: number) => {
+    setNav((prev) => {
+      if (val === prev.scrollOffset) return prev;
+      return { ...prev, scrollOffset: val };
+    });
+  }, []);
 
   const configuredProviders = useMemo(() => {
     return Array.from(providers.values())
@@ -255,6 +292,8 @@ export function RealTimeDashboard() {
     return result;
   }, [baseFilteredSessions, activeDriverFilter, driverDimension, sortField, sortDirection]);
 
+  sessionsLengthRef.current = processedSessions.length;
+
   // A keypress and a refresh tick can batch into one render; if they do,
   // `prev` may be the user's new row while `selectedSessionIdRef` is still
   // the session they moved *from*. Trusting `prev` when it resolves to a
@@ -308,19 +347,22 @@ export function RealTimeDashboard() {
   }, [selectedRow, processedSessions]);
 
   useLayoutEffect(() => {
-    if (!sessionsScrollboxRef.current || processedSessions.length === 0) return;
+    if (processedSessions.length === 0) return;
+    setNav((prev) => {
+      const newOffset = computeScrollOffset(
+        prev.selectedRow,
+        prev.scrollOffset,
+        visibleRows,
+        processedSessions.length,
+      );
+      if (newOffset === prev.scrollOffset) return prev;
+      return { ...prev, scrollOffset: newOffset };
+    });
+  }, [processedSessions.length, visibleRows]);
 
-    let newOffset = scrollOffsetRef.current;
-
-    if (selectedRow < newOffset) {
-      newOffset = selectedRow;
-    } else if (selectedRow >= newOffset + visibleRows) {
-      newOffset = selectedRow - visibleRows + 1;
-    }
-
-    scrollOffsetRef.current = newOffset;
-    sessionsScrollboxRef.current.scrollTo(newOffset);
-  }, [selectedRow, processedSessions.length, visibleRows]);
+  useLayoutEffect(() => {
+    sessionsScrollboxRef.current?.scrollTo(scrollOffset);
+  }, [scrollOffset]);
 
   const openSessionDrawer = useCallback(() => {
     const session = processedSessions[selectedRow];
@@ -343,7 +385,7 @@ export function RealTimeDashboard() {
       sortField,
       sortDirection,
       pendingG,
-      scrollOffset: scrollOffsetRef.current,
+      scrollOffset,
       limitSelectedIndex,
       providerCount: configuredProviders.length,
       driverDimension,
