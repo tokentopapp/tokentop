@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.7.0](https://github.com/tokentopapp/tokentop/compare/v0.6.1...v0.7.0) (2026-04-17)
+
+
+### Features
+
+* **demo:** realistic seeded simulator with 50/500/4000 sessions ([cbc072a](https://github.com/tokentopapp/tokentop/commit/cbc072af7284648f8e321bc15741937a532e0de2))
+* tiered context-based pricing (&gt;200K token threshold) ([#76](https://github.com/tokentopapp/tokentop/issues/76)) ([7b7c7e8](https://github.com/tokentopapp/tokentop/commit/7b7c7e80580b301309f5038b0dda2bf9d6e3712d))
+
+
+### Bug Fixes
+
+* eliminate AbortSignal leak in provider refresh and session parse paths ([80b273f](https://github.com/tokentopapp/tokentop/commit/80b273f5330be0d5744ef9729bb882e0398e1cd4))
+* fall through to Claude Code creds when OpenCode Anthropic token is expired ([0f5f6d7](https://github.com/tokentopapp/tokentop/commit/0f5f6d792b9a6e47aa1980f57f062a1d2706ee1f))
+* memory leaks from unconsumed response bodies, AbortSignal accumulation, and unbounded Maps ([0c78f6d](https://github.com/tokentopapp/tokentop/commit/0c78f6df99ec8802460b52cdf044699f17e2abfe))
+* **tui:** eliminate selection snap-back on concurrent keypress + refresh ([aa86886](https://github.com/tokentopapp/tokentop/commit/aa86886b1ca4976898401a241348de20c1ce02a9))
+* **tui:** fix burst capture key ordering and add tmux-safe alias ([55b4a33](https://github.com/tokentopapp/tokentop/commit/55b4a33ea7ba8e0fbb7ee2373f680339e07b7ebd))
+* **tui:** keep cursor on-screen during rapid j/k scroll ([759ed40](https://github.com/tokentopapp/tokentop/commit/759ed40b75f5409ef53b7d140a6d707f2f98362e))
+
+
+### Performance
+
+* **agents:** mark cross-agent shadows instead of dropping them ([ec5608f](https://github.com/tokentopapp/tokentop/commit/ec5608f798f6ec526b9d5069540ce8e7ab5e744a))
+* **providers:** skip refresh when one is already in flight ([80451fd](https://github.com/tokentopapp/tokentop/commit/80451fd0a6767b677546a00444045c0952a98472))
+* **storage:** seed write-gate maps to eliminate tick-2 freeze ([65a9e2a](https://github.com/tokentopapp/tokentop/commit/65a9e2ac71e2b7b392b8c06c78ccbcb8f1b49cc7))
+* **tui:** skip unconditional session array spread in filter memo ([860ca6a](https://github.com/tokentopapp/tokentop/commit/860ca6a060e4ae6998213919b54ec34414d728c5))
+* **tui:** virtualize sessions table to eliminate long-window freeze ([5badc85](https://github.com/tokentopapp/tokentop/commit/5badc8583c1be9af9cd9a0853c363d06521af7f2))
+
 ## [0.6.1](https://github.com/tokentopapp/tokentop/compare/v0.6.0...v0.6.1) (2026-03-20)
 
 
