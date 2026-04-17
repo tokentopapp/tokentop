@@ -5,13 +5,16 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import {
   aggregateSessionUsage,
   deduplicateAggregates,
-  deduplicateCrossAgent,
+  isCrossAgentShadow,
+  markCrossAgentShadows,
+  selectEffectiveSessions,
 } from "@/agents/aggregator.ts";
 import { priceSessions } from "@/agents/costing.ts";
 import type { AgentId, AgentInfo, AgentSessionAggregate } from "@/agents/types.ts";
@@ -52,10 +55,12 @@ interface AgentSessionProviderProps {
  */
 function computeSessionFingerprint(sessions: AgentSessionAggregate[]): string {
   // Build a compact string from the fields that actually affect the UI.
-  // This is intentionally simple — no crypto hashing needed, just string comparison.
+  // Shadow bit is included so that flipping a session's dedup status
+  // (gaining or losing its cross-agent shadow mark) triggers a re-render.
   let fp = `${sessions.length}:`;
   for (const s of sessions) {
-    fp += `${s.sessionId},${s.status},${s.lastActivityAt},${s.totals.input},${s.totals.output},${s.totalCostUsd ?? 0},${s.requestCount};`;
+    const shadow = isCrossAgentShadow(s) ? "1" : "0";
+    fp += `${s.sessionId},${s.status},${s.lastActivityAt},${s.totals.input},${s.totals.output},${s.totalCostUsd ?? 0},${s.requestCount},${shadow};`;
   }
   return fp;
 }
@@ -210,7 +215,6 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
           }
         }
 
-        // Deduplicate sessions claimed by multiple agents scanning the same directory.
         const dedupedAggregates = deduplicateAggregates(allAggregates);
         if (dedupedAggregates.length < allAggregates.length) {
           debug(
@@ -219,6 +223,8 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
             "agent-sessions",
           );
         }
+
+        markCrossAgentShadows(dedupedAggregates);
 
         const pricedSessions = await priceSessions(dedupedAggregates);
 
@@ -238,13 +244,13 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
           return;
         }
 
-        const finalSessions = deduplicateCrossAgent(pricedSessions);
+        const effectiveSessions = selectEffectiveSessions(pricedSessions);
 
         // Persist to storage — the persistence service handles throttling
         // internally (fingerprint gate + 5-minute per-session throttle).
         // Safe to call every tick; state lives on globalThis, survives HMR.
         const now = Date.now();
-        const persistData = finalSessions.map((session) => ({
+        const persistData = effectiveSessions.map((session) => ({
           session: {
             agentId: session.agentId,
             sessionId: session.sessionId,
@@ -277,15 +283,19 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
         }));
         const persistedCount = persistSessions(persistData);
         debug(
-          `Persisted ${persistedCount}/${finalSessions.length} sessions to storage`,
+          `Persisted ${persistedCount}/${effectiveSessions.length} sessions to storage`,
           undefined,
           "agent-sessions",
         );
 
-        setSessions(finalSessions);
+        setSessions(pricedSessions);
         setLastRefreshAt(Date.now());
 
-        debug(`Session refresh complete`, { count: finalSessions.length }, "agent-sessions");
+        debug(
+          `Session refresh complete`,
+          { count: pricedSessions.length, effective: effectiveSessions.length },
+          "agent-sessions",
+        );
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Unknown error";
         logError(`Session refresh failed: ${errorMsg}`, undefined, "agent-sessions");
@@ -298,11 +308,14 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
         }
       }
     },
-    [sessions.length, discoverAgents, fetchAgentSessions, debug, warn, logError, demoMode],
+    [discoverAgents, fetchAgentSessions, debug, warn, logError, demoMode, simulator],
   );
 
   const refreshSessionsRef = useRef(refreshSessions);
   refreshSessionsRef.current = refreshSessions;
+
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   useEffect(() => {
     if (!(demoMode || pluginsInitialized)) return;
@@ -324,7 +337,7 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
     let timerId: ReturnType<typeof setTimeout> | null = null;
 
     const scheduleNext = () => {
-      const hasActive = sessions.some((s) => s.status === "active");
+      const hasActive = sessionsRef.current.some((s) => s.status === "active");
       const interval = hasActive ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
 
       timerId = setTimeout(() => {
@@ -344,16 +357,21 @@ export function AgentSessionProvider({ children, autoRefresh = false }: AgentSes
         clearTimeout(timerId);
       }
     };
-  }, [autoRefresh, sessions, debug]);
+  }, [autoRefresh, debug]);
 
-  const value: AgentSessionContextValue = {
-    sessions,
-    agents,
-    isLoading,
-    lastRefreshAt,
-    error,
-    refreshSessions,
-  };
+  const effectiveSessions = useMemo(() => selectEffectiveSessions(sessions), [sessions]);
+
+  const value: AgentSessionContextValue = useMemo(
+    () => ({
+      sessions: effectiveSessions,
+      agents,
+      isLoading,
+      lastRefreshAt,
+      error,
+      refreshSessions,
+    }),
+    [effectiveSessions, agents, isLoading, lastRefreshAt, error, refreshSessions],
+  );
 
   return <AgentSessionContext.Provider value={value}>{children}</AgentSessionContext.Provider>;
 }

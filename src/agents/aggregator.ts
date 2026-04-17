@@ -305,3 +305,122 @@ export function deduplicateAggregates(
   }
   return Array.from(deduped.values());
 }
+
+export interface CrossAgentShadowMetadata {
+  kind: "cross-agent-shadow";
+  shadowOfAgentId: string;
+  shadowOfSessionId: string;
+  reason: "proxy-sdk-session-id" | "heuristic";
+}
+
+export function isCrossAgentShadow(session: AgentSessionAggregate): boolean {
+  const dedup = session.metadata?.dedup as { kind?: string } | undefined;
+  return dedup?.kind === "cross-agent-shadow";
+}
+
+export function selectEffectiveSessions(
+  sessions: AgentSessionAggregate[],
+): AgentSessionAggregate[] {
+  return sessions.filter((s) => !isCrossAgentShadow(s));
+}
+
+const CROSS_AGENT_TIMESTAMP_TOLERANCE_MS = 120_000;
+
+function normalizeProjectPath(p: string | undefined): string {
+  if (!p) return "";
+  return p.replace(/\/+$/, "");
+}
+
+export function markCrossAgentShadows(
+  aggregates: AgentSessionAggregate[],
+): AgentSessionAggregate[] {
+  const opencodeSessions: AgentSessionAggregate[] = [];
+  const claudeCodeById = new Map<string, AgentSessionAggregate>();
+  const claudeCodeByPath = new Map<string, AgentSessionAggregate[]>();
+  const ccStreamKeys = new Map<string, string[]>();
+
+  for (const agg of aggregates) {
+    if (agg.agentId === "opencode") {
+      opencodeSessions.push(agg);
+    } else if (agg.agentId === "claude-code") {
+      claudeCodeById.set(agg.sessionId, agg);
+      const path = normalizeProjectPath(agg.projectPath);
+      if (path) {
+        const bucket = claudeCodeByPath.get(path);
+        if (bucket) bucket.push(agg);
+        else claudeCodeByPath.set(path, [agg]);
+      }
+      const keys: string[] = new Array(agg.streams.length);
+      for (let i = 0; i < agg.streams.length; i++) {
+        const s = agg.streams[i]!;
+        keys[i] = `${s.providerId}::${s.modelId}`;
+      }
+      ccStreamKeys.set(agg.sessionId, keys);
+    }
+  }
+
+  if (opencodeSessions.length === 0 || claudeCodeById.size === 0) {
+    return aggregates;
+  }
+
+  const claimed = new Set<string>();
+
+  for (const oc of opencodeSessions) {
+    const proxy = oc.metadata?.proxy as { sdkSessionId?: string } | undefined;
+    if (!proxy?.sdkSessionId) continue;
+    const cc = claudeCodeById.get(proxy.sdkSessionId);
+    if (!cc || claimed.has(cc.sessionId)) continue;
+    cc.metadata = {
+      ...cc.metadata,
+      dedup: {
+        kind: "cross-agent-shadow",
+        shadowOfAgentId: "opencode",
+        shadowOfSessionId: oc.sessionId,
+        reason: "proxy-sdk-session-id",
+      } satisfies CrossAgentShadowMetadata,
+    };
+    claimed.add(cc.sessionId);
+  }
+
+  for (const oc of opencodeSessions) {
+    if (oc.streams.length === 0) continue;
+    const ocPath = normalizeProjectPath(oc.projectPath);
+    if (!ocPath) continue;
+    const bucket = claudeCodeByPath.get(ocPath);
+    if (!bucket) continue;
+
+    const ocKeys = new Set<string>();
+    for (const s of oc.streams) ocKeys.add(`${s.providerId}::${s.modelId}`);
+
+    for (const cc of bucket) {
+      if (claimed.has(cc.sessionId)) continue;
+      if (Math.abs(oc.lastActivityAt - cc.lastActivityAt) > CROSS_AGENT_TIMESTAMP_TOLERANCE_MS) {
+        continue;
+      }
+      const ccKeys = ccStreamKeys.get(cc.sessionId);
+      if (!ccKeys || ccKeys.length === 0) continue;
+      let overlap = false;
+      for (const k of ccKeys) {
+        if (ocKeys.has(k)) {
+          overlap = true;
+          break;
+        }
+      }
+      if (!overlap) continue;
+
+      cc.metadata = {
+        ...cc.metadata,
+        dedup: {
+          kind: "cross-agent-shadow",
+          shadowOfAgentId: "opencode",
+          shadowOfSessionId: oc.sessionId,
+          reason: "heuristic",
+        } satisfies CrossAgentShadowMetadata,
+      };
+      claimed.add(cc.sessionId);
+      break;
+    }
+  }
+
+  return aggregates;
+}
