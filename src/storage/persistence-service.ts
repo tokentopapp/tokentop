@@ -15,6 +15,7 @@
 
 import { isDatabaseInitialized } from "./db.ts";
 import {
+  getLatestSnapshotsForAllSessions,
   getLatestStreamTotalsForAllSessions,
   insertAgentSessionSnapshot,
   upsertAgentSession,
@@ -208,11 +209,6 @@ export function persistSessions(sessions: SessionPersistData[]): number {
   return persistedCount;
 }
 
-/**
- * Seed previous stream totals from the database.
- * Called once at startup after DB initialization to ensure
- * accurate delta computation from the first persistence call.
- */
 export function seedPreviousTotals(): void {
   const state = getState();
   if (state.seeded) return;
@@ -230,6 +226,28 @@ export function seedPreviousTotals(): void {
         requestCount: row.requestCount,
       });
     }
+
+    // Seeds Gate 1/2 so the first post-startup tick does not rewrite every
+    // historical session. computeFingerprint only reads cost/count/input/output,
+    // so the other fields are placeholders to satisfy the snapshot shape.
+    const latestSnapshots = getLatestSnapshotsForAllSessions();
+    for (const snap of latestSnapshots) {
+      const sessionKey = `${snap.agentId}:${snap.sessionId}`;
+      const fp = computeFingerprint({
+        timestamp: snap.timestamp,
+        lastActivityAt: snap.timestamp,
+        status: null,
+        totalInputTokens: snap.totalInputTokens,
+        totalOutputTokens: snap.totalOutputTokens,
+        totalCacheReadTokens: 0,
+        totalCacheWriteTokens: 0,
+        totalCostUsd: snap.totalCostUsd,
+        requestCount: snap.requestCount,
+      });
+      state.sessionFingerprints.set(sessionKey, fp);
+      state.lastWriteTimestamps.set(sessionKey, snap.timestamp);
+    }
+
     state.seeded = true;
   } catch (err) {
     console.error("Failed to seed previous totals from DB:", err);

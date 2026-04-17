@@ -172,6 +172,55 @@ export interface LatestStreamTotals {
   requestCount: number;
 }
 
+export interface LatestSessionSnapshot {
+  agentId: string;
+  sessionId: string;
+  timestamp: number;
+  totalCostUsd: number;
+  requestCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
+export function getLatestSnapshotsForAllSessions(): LatestSessionSnapshot[] {
+  const db = getDatabase();
+
+  const rows = db
+    .prepare(`
+    SELECT
+      s.agent_id, s.session_id,
+      snap.timestamp,
+      snap.total_cost_usd, snap.request_count,
+      snap.total_input_tokens, snap.total_output_tokens
+    FROM agent_session_snapshots snap
+    JOIN agent_sessions s ON s.id = snap.agent_session_id
+    WHERE snap.id IN (
+      SELECT MAX(snap2.id)
+      FROM agent_session_snapshots snap2
+      GROUP BY snap2.agent_session_id
+    )
+  `)
+    .all() as Array<{
+    agent_id: string;
+    session_id: string;
+    timestamp: number;
+    total_cost_usd: number;
+    request_count: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+  }>;
+
+  return rows.map((r) => ({
+    agentId: r.agent_id,
+    sessionId: r.session_id,
+    timestamp: r.timestamp,
+    totalCostUsd: r.total_cost_usd,
+    requestCount: r.request_count,
+    totalInputTokens: r.total_input_tokens,
+    totalOutputTokens: r.total_output_tokens,
+  }));
+}
+
 export function getLatestStreamTotalsForAllSessions(): LatestStreamTotals[] {
   const db = getDatabase();
 
