@@ -245,12 +245,12 @@ function AppContent() {
   ]);
 
   useKeyboard((key) => {
-    if (key.ctrl && key.name === "p") {
-      handleCaptureFrame();
+    if ((key.ctrl && key.shift && key.name === "p") || (key.shift && key.name === "p")) {
+      handleBurstRecord();
       return;
     }
-    if (key.ctrl && key.shift && key.name === "p") {
-      handleBurstRecord();
+    if (key.ctrl && key.name === "p") {
+      handleCaptureFrame();
       return;
     }
 
