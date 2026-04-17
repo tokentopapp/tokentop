@@ -60,12 +60,6 @@ export function Dashboard() {
   const cardRefs = useRef<(BoxRenderable | null)[]>([]);
   const inputRef = useRef<InputRenderable>(null);
 
-  useEffect(() => {
-    if (isInitialized) {
-      refreshAllProviders();
-    }
-  }, [isInitialized]);
-
   const getMaxUsage = useCallback((state: ProviderState) => {
     if (!state.usage?.limits) return 0;
 

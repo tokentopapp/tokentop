@@ -275,7 +275,11 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
         return;
       }
 
-      // Skip providers that are currently rate-limited (backoff)
+      if (state.loading) {
+        debug(`Skipping refresh for ${providerId}: already in flight`, undefined, "refresh");
+        return;
+      }
+
       const now = Date.now();
       if (state.rateLimitUntil > now) {
         const remainingSec = Math.round((state.rateLimitUntil - now) / 1000);
@@ -519,14 +523,25 @@ export function PluginProvider({ children, cliPlugins }: PluginProviderProps) {
     await Promise.all(configuredProviders.map(refreshProvider));
   }, [providers, refreshProvider, info]);
 
+  const refreshProviderRef = useRef(refreshProvider);
+  const refreshAllProvidersRef = useRef(refreshAllProviders);
+  refreshProviderRef.current = refreshProvider;
+  refreshAllProvidersRef.current = refreshAllProviders;
+
+  const stableRefreshProvider = useCallback(
+    (providerId: string) => refreshProviderRef.current(providerId),
+    [],
+  );
+  const stableRefreshAllProviders = useCallback(() => refreshAllProvidersRef.current(), []);
+
   const value: PluginContextValue = {
     providers,
     agents,
     themes,
     notifications,
     isInitialized,
-    refreshProvider,
-    refreshAllProviders,
+    refreshProvider: stableRefreshProvider,
+    refreshAllProviders: stableRefreshAllProviders,
   };
 
   return <PluginContext.Provider value={value}>{children}</PluginContext.Provider>;
