@@ -155,18 +155,22 @@ export const anthropicPlugin: ProviderPlugin = {
     async discover(ctx: PluginContext): Promise<CredentialResult> {
       const entry = await ctx.authSources.opencode.getProviderEntry("anthropic");
       if (entry?.type === "oauth" && entry.access) {
-        return {
-          ok: true,
-          credentials: {
-            oauth: buildOAuthCredentials(
-              entry.access,
-              entry.refresh,
-              entry.expires,
-              entry.accountId,
-            ),
-            source: "opencode",
-          },
-        };
+        const expired =
+          entry.expires != null && entry.expires <= Date.now() + TOKEN_EXPIRY_BUFFER_MS;
+        if (!expired) {
+          return {
+            ok: true,
+            credentials: {
+              oauth: buildOAuthCredentials(
+                entry.access,
+                entry.refresh,
+                entry.expires,
+                entry.accountId,
+              ),
+              source: "opencode",
+            },
+          };
+        }
       }
 
       const claudeCodeResult = await discoverClaudeCode(ctx);

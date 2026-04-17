@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type {
   Credentials,
+  OpenCodeAuthEntry,
+  PluginContext,
   PluginHttpClient,
   PluginLogger,
   ProviderFetchContext,
@@ -198,5 +200,148 @@ describe("anthropic fetchUsage — success", () => {
     expect(result.planType).toBe("API");
     expect(result.allowed).toBe(true);
     expect(result.error).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// auth.discover — credential source fallthrough
+// ---------------------------------------------------------------------------
+
+function createDiscoverContext(options: {
+  opencodeEntry?: OpenCodeAuthEntry | null;
+  files?: Record<string, string>;
+  env?: Record<string, string>;
+  platformOs?: "darwin" | "linux" | "win32";
+  homedir?: string;
+}): PluginContext {
+  const files = options.files ?? {};
+  const env = options.env ?? {};
+  return {
+    config: {},
+    logger: createMockLogger(),
+    http: { fetch: async () => new Response(null, { status: 404 }) },
+    storage: {
+      get: async () => null,
+      set: async () => {},
+      delete: async () => {},
+      has: async () => false,
+    },
+    signal: new AbortController().signal,
+    authSources: {
+      env: { get: (name) => env[name] },
+      files: {
+        readText: async (path) => files[path] ?? null,
+        readJson: async <T = unknown>(path: string): Promise<T | null> => {
+          const raw = files[path];
+          if (!raw) return null;
+          try {
+            return JSON.parse(raw) as T;
+          } catch {
+            return null;
+          }
+        },
+        exists: async (path) => path in files,
+      },
+      opencode: {
+        getProviderEntry: async () => options.opencodeEntry ?? null,
+      },
+      platform: {
+        os: options.platformOs ?? "linux",
+        homedir: options.homedir ?? "/home/test",
+        arch: "x64",
+      },
+    },
+  };
+}
+
+describe("anthropic auth.discover — OpenCode OAuth expiry", () => {
+  // Regression: an expired OpenCode OAuth entry used to be returned as-is,
+  // blocking fallthrough to fresher Claude Code credentials and causing the
+  // TUI to show "needs auth" even when Claude Code had a valid token.
+  test("falls through to Claude Code credentials when OpenCode OAuth is expired", async () => {
+    const now = Date.now();
+    const ctx = createDiscoverContext({
+      opencodeEntry: {
+        type: "oauth",
+        access: "stale-opencode-token",
+        refresh: "stale-refresh",
+        expires: now - 60_000,
+      },
+      files: {
+        "/home/test/.claude/.credentials.json": JSON.stringify({
+          claudeAiOauth: {
+            accessToken: "fresh-claude-code-token",
+            refreshToken: "fresh-refresh",
+            expiresAt: now + 3_600_000,
+            subscriptionType: "max",
+          },
+        }),
+      },
+    });
+
+    const result = await anthropicPlugin.auth.discover(ctx);
+
+    expect(result.ok).toBe(true);
+    expect(result.credentials?.oauth?.accessToken).toBe("fresh-claude-code-token");
+    expect(result.credentials?.source).toBe("external");
+  });
+
+  test("treats near-expiry OpenCode token (within 5-minute buffer) as expired", async () => {
+    const now = Date.now();
+    const ctx = createDiscoverContext({
+      opencodeEntry: {
+        type: "oauth",
+        access: "near-expiry-opencode-token",
+        expires: now + 60_000,
+      },
+      env: { ANTHROPIC_API_KEY: "sk-ant-api-key" },
+    });
+
+    const result = await anthropicPlugin.auth.discover(ctx);
+
+    expect(result.ok).toBe(true);
+    expect(result.credentials?.apiKey).toBe("sk-ant-api-key");
+    expect(result.credentials?.source).toBe("env");
+  });
+
+  test("uses OpenCode entry when token is comfortably in the future", async () => {
+    const now = Date.now();
+    const ctx = createDiscoverContext({
+      opencodeEntry: {
+        type: "oauth",
+        access: "valid-opencode-token",
+        refresh: "valid-refresh",
+        expires: now + 3_600_000,
+      },
+      files: {
+        "/home/test/.claude/.credentials.json": JSON.stringify({
+          claudeAiOauth: {
+            accessToken: "claude-code-token",
+            expiresAt: now + 3_600_000,
+          },
+        }),
+      },
+    });
+
+    const result = await anthropicPlugin.auth.discover(ctx);
+
+    expect(result.ok).toBe(true);
+    expect(result.credentials?.oauth?.accessToken).toBe("valid-opencode-token");
+    expect(result.credentials?.source).toBe("opencode");
+  });
+
+  test("uses OpenCode entry with no expires field (treated as non-expiring)", async () => {
+    const ctx = createDiscoverContext({
+      opencodeEntry: {
+        type: "oauth",
+        access: "no-expiry-token",
+      },
+    });
+
+    const result = await anthropicPlugin.auth.discover(ctx);
+
+    expect(result.ok).toBe(true);
+    expect(result.credentials?.oauth?.accessToken).toBe("no-expiry-token");
+    expect(result.credentials?.source).toBe("opencode");
   });
 });
