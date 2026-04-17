@@ -10,9 +10,12 @@ import type { UsageEventInsert } from "@/storage/types.ts";
 
 /**
  * Demo presets control the intensity of simulated activity.
- * - light: Low activity, fewer sessions, slower token accumulation
- * - normal: Moderate activity, balanced simulation (default)
- * - heavy: High activity, more sessions, faster token accumulation
+ * - light: ~50 sessions, low variety, sparse activity
+ * - normal: ~500 sessions, moderate variety, balanced simulation (default)
+ * - heavy: ~4000 sessions, wide model/project variety, bursty activity
+ *
+ * All generation is deterministic on (seed, preset): identical session ids,
+ * counts, tokens, costs, project paths for every run at the same seed.
  */
 export type DemoPreset = "light" | "normal" | "heavy";
 
@@ -24,126 +27,314 @@ export interface DemoPresetConfig {
   idleProbability: number;
   burstProbability: number;
   burstMultiplier: number;
+  tokenScale: number;
+  historicalDailyCostBase: number;
 }
 
 export const DEMO_PRESETS: Record<DemoPreset, DemoPresetConfig> = {
   light: {
-    sessionCount: 2,
+    sessionCount: 50,
     activityMultiplier: 0.5,
     extraProviderCount: 1,
     usageRange: [5, 35],
     idleProbability: 0.6,
     burstProbability: 0.05,
     burstMultiplier: 3,
+    tokenScale: 150,
+    historicalDailyCostBase: 2,
   },
   normal: {
-    sessionCount: 4,
+    sessionCount: 500,
     activityMultiplier: 1.0,
     extraProviderCount: 3,
     usageRange: [8, 72],
     idleProbability: 0.35,
     burstProbability: 0.1,
     burstMultiplier: 4,
+    tokenScale: 250,
+    historicalDailyCostBase: 15,
   },
   heavy: {
-    sessionCount: 6,
+    sessionCount: 4000,
     activityMultiplier: 2.0,
     extraProviderCount: 10,
     usageRange: [25, 95],
     idleProbability: 0.15,
     burstProbability: 0.2,
     burstMultiplier: 5,
+    tokenScale: 400,
+    historicalDailyCostBase: 55,
   },
 };
 
-export interface DemoSessionSeed {
-  sessionId: string;
-  sessionName?: string;
-  agentId: "opencode" | "claude-code" | "cursor";
-  agentName: "OpenCode" | "Claude Code" | "Cursor";
-  projectPath: string;
-  modelId: string;
+type AgentKey = "opencode" | "claude-code" | "cursor" | "copilot-cli" | "gemini-cli";
+type AgentName = "OpenCode" | "Claude Code" | "Cursor" | "Copilot CLI" | "Gemini CLI";
+
+interface ModelConfig {
   providerId: string;
-  baseTokens: number;
-  baseCost: number;
-  inactive?: boolean;
+  modelId: string;
+  inputRate: number;
+  outputRate: number;
+  cacheReadRate?: number;
+  cacheWriteRate?: number;
+  weight: number;
 }
 
-const DEFAULT_SESSIONS: DemoSessionSeed[] = [
+const MODEL_POOL: ModelConfig[] = [
   {
-    sessionId: "demo-opencode-1",
-    sessionName: "Implement dashboard view with real-time updates",
-    agentId: "opencode",
-    agentName: "OpenCode",
-    projectPath: "/Users/demo/workspace/tokentop",
-    modelId: "claude-3-5-sonnet",
     providerId: "anthropic",
-    baseTokens: 3200,
-    baseCost: 1.24,
+    modelId: "claude-opus-4-7",
+    inputRate: 15,
+    outputRate: 75,
+    cacheReadRate: 1.5,
+    cacheWriteRate: 18.75,
+    weight: 90,
   },
   {
-    sessionId: "demo-opencode-2",
-    sessionName: "Fix Kubernetes deployment configuration",
-    agentId: "opencode",
-    agentName: "OpenCode",
-    projectPath: "/Users/demo/workspace/infra",
-    modelId: "gpt-4.1",
+    providerId: "anthropic",
+    modelId: "claude-sonnet-4-20250514",
+    inputRate: 3,
+    outputRate: 15,
+    cacheReadRate: 0.3,
+    cacheWriteRate: 3.75,
+    weight: 45,
+  },
+  {
+    providerId: "xai",
+    modelId: "grok-code-fast-1",
+    inputRate: 0.2,
+    outputRate: 1.5,
+    weight: 38,
+  },
+  {
+    providerId: "anthropic",
+    modelId: "claude-3-5-sonnet-20241022",
+    inputRate: 3,
+    outputRate: 15,
+    cacheReadRate: 0.3,
+    cacheWriteRate: 3.75,
+    weight: 30,
+  },
+  {
     providerId: "openai",
-    baseTokens: 2100,
-    baseCost: 0.92,
+    modelId: "gpt-4.1",
+    inputRate: 2,
+    outputRate: 8,
+    cacheReadRate: 0.5,
+    weight: 22,
   },
   {
-    sessionId: "demo-claude-1",
-    sessionName: "Add authentication flow to mobile app",
-    agentId: "claude-code",
-    agentName: "Claude Code",
-    projectPath: "/Users/demo/workspace/mobile",
-    modelId: "claude-3-opus",
-    providerId: "anthropic",
-    baseTokens: 1800,
-    baseCost: 0.78,
-  },
-  {
-    sessionId: "demo-cursor-1",
-    sessionName: "Refactor API endpoints for better performance",
-    agentId: "cursor",
-    agentName: "Cursor",
-    projectPath: "/Users/demo/workspace/webapp",
-    modelId: "gemini-2.0-pro",
     providerId: "google-gemini",
-    baseTokens: 2600,
-    baseCost: 0.64,
+    modelId: "gemini-2.5-pro",
+    inputRate: 1.25,
+    outputRate: 10,
+    weight: 18,
   },
   {
-    sessionId: "demo-opencode-old-1",
-    sessionName: "Migrate legacy API to REST v2",
-    agentId: "opencode",
-    agentName: "OpenCode",
-    projectPath: "/Users/demo/workspace/legacy-api",
-    modelId: "claude-3-5-sonnet",
     providerId: "anthropic",
-    baseTokens: 5400,
-    baseCost: 2.18,
-    inactive: true,
+    modelId: "claude-3-5-haiku-20241022",
+    inputRate: 0.8,
+    outputRate: 4,
+    cacheReadRate: 0.08,
+    cacheWriteRate: 1,
+    weight: 15,
+  },
+  { providerId: "minimax", modelId: "minimax-m2.5-free", inputRate: 0, outputRate: 0, weight: 14 },
+  {
+    providerId: "anthropic",
+    modelId: "claude-3-7-sonnet-20250219",
+    inputRate: 3,
+    outputRate: 15,
+    cacheReadRate: 0.3,
+    cacheWriteRate: 3.75,
+    weight: 12,
   },
   {
-    sessionId: "demo-claude-old-1",
-    sessionName: "Update documentation with new API examples",
-    agentId: "claude-code",
-    agentName: "Claude Code",
-    projectPath: "/Users/demo/workspace/docs-site",
-    modelId: "gpt-4.1",
     providerId: "openai",
-    baseTokens: 3800,
-    baseCost: 1.56,
-    inactive: true,
+    modelId: "gpt-4.1-mini",
+    inputRate: 0.4,
+    outputRate: 1.6,
+    cacheReadRate: 0.1,
+    weight: 11,
   },
+  {
+    providerId: "google-gemini",
+    modelId: "gemini-3-pro-preview",
+    inputRate: 2,
+    outputRate: 12,
+    cacheReadRate: 0.2,
+    weight: 10,
+  },
+  {
+    providerId: "openai",
+    modelId: "gpt-4o",
+    inputRate: 2.5,
+    outputRate: 10,
+    cacheReadRate: 1.25,
+    weight: 9,
+  },
+  {
+    providerId: "google-gemini",
+    modelId: "gemini-2.5-flash",
+    inputRate: 0.15,
+    outputRate: 0.6,
+    weight: 8,
+  },
+  { providerId: "openai", modelId: "o3", inputRate: 10, outputRate: 40, weight: 7 },
+  { providerId: "openai", modelId: "o4-mini", inputRate: 1.1, outputRate: 4.4, weight: 6 },
+  {
+    providerId: "anthropic",
+    modelId: "claude-3-opus-20240229",
+    inputRate: 15,
+    outputRate: 75,
+    cacheReadRate: 1.5,
+    cacheWriteRate: 18.75,
+    weight: 5,
+  },
+  {
+    providerId: "google-gemini",
+    modelId: "gemini-3-flash-preview",
+    inputRate: 0.5,
+    outputRate: 3,
+    cacheReadRate: 0.05,
+    weight: 5,
+  },
+  {
+    providerId: "openai",
+    modelId: "gpt-4o-mini",
+    inputRate: 0.15,
+    outputRate: 0.6,
+    cacheReadRate: 0.075,
+    weight: 4,
+  },
+  {
+    providerId: "google-gemini",
+    modelId: "gemini-3.1-pro-preview",
+    inputRate: 2,
+    outputRate: 12,
+    cacheReadRate: 0.2,
+    weight: 3,
+  },
+  {
+    providerId: "github-copilot",
+    modelId: "claude-sonnet-4-copilot",
+    inputRate: 0,
+    outputRate: 0,
+    weight: 3,
+  },
+  { providerId: "openai", modelId: "o3-mini", inputRate: 1.1, outputRate: 4.4, weight: 2 },
+];
+
+interface AgentConfig {
+  id: AgentKey;
+  name: AgentName;
+  weight: number;
+  allowedProviders?: Set<string>;
+}
+
+const AGENT_POOL: AgentConfig[] = [
+  { id: "opencode", name: "OpenCode", weight: 55 },
+  {
+    id: "claude-code",
+    name: "Claude Code",
+    weight: 20,
+    allowedProviders: new Set(["anthropic"]),
+  },
+  { id: "cursor", name: "Cursor", weight: 10 },
+  {
+    id: "copilot-cli",
+    name: "Copilot CLI",
+    weight: 8,
+    allowedProviders: new Set(["github-copilot", "anthropic", "openai"]),
+  },
+  {
+    id: "gemini-cli",
+    name: "Gemini CLI",
+    weight: 7,
+    allowedProviders: new Set(["google-gemini"]),
+  },
+];
+
+interface ProjectConfig {
+  path: string;
+  weight: number;
+}
+
+const PROJECT_POOL: ProjectConfig[] = [
+  { path: "/Users/demo/workspace/tokentop", weight: 35 },
+  { path: "/Users/demo/workspace/webapp", weight: 20 },
+  { path: "/Users/demo/workspace/infra", weight: 14 },
+  { path: "/Users/demo/workspace/mobile", weight: 11 },
+  { path: "/Users/demo/workspace/docs-site", weight: 8 },
+  { path: "/Users/demo/workspace/ml-pipeline", weight: 7 },
+  { path: "/Users/demo/workspace/auth-service", weight: 6 },
+  { path: "/Users/demo/workspace/design-system", weight: 5 },
+  { path: "/Users/demo/workspace/notifications-service", weight: 5 },
+  { path: "/Users/demo/workspace/data-platform", weight: 4 },
+  { path: "/Users/demo/workspace/legacy-api", weight: 3 },
+  { path: "/Users/demo/workspace/playground", weight: 2 },
+];
+
+const SESSION_NAME_VERBS = [
+  "Implement",
+  "Fix",
+  "Refactor",
+  "Add",
+  "Remove",
+  "Update",
+  "Migrate",
+  "Optimize",
+  "Debug",
+  "Review",
+  "Investigate",
+  "Design",
+  "Prototype",
+  "Test",
+  "Ship",
+  "Rewrite",
+  "Document",
+];
+const SESSION_NAME_SUBJECTS = [
+  "authentication flow",
+  "user dashboard",
+  "caching layer",
+  "API pagination",
+  "rate limiting",
+  "error handling",
+  "database schema",
+  "CI pipeline",
+  "deployment config",
+  "observability stack",
+  "feature flags",
+  "type definitions",
+  "onboarding wizard",
+  "settings page",
+  "webhook handler",
+  "billing integration",
+  "search index",
+  "notification system",
+  "audit log",
+  "data migration script",
+  "component library",
+  "theme tokens",
+  "analytics tracker",
+  "session store",
+  "oauth callback",
+  "permissions model",
+  "export pipeline",
+  "rollout telemetry",
+  "plugin loader",
+  "credential discovery",
+  "snapshot regression",
 ];
 
 const PROVIDER_LIMITS: Record<string, { label: string; windowMinutes: number }> = {
   anthropic: { label: "Daily Tokens", windowMinutes: 1440 },
   openai: { label: "Daily Tokens", windowMinutes: 1440 },
   "google-gemini": { label: "Daily Tokens", windowMinutes: 1440 },
+  xai: { label: "Daily Tokens", windowMinutes: 1440 },
+  minimax: { label: "Daily Tokens", windowMinutes: 1440 },
+  "github-copilot": { label: "Monthly Tokens", windowMinutes: 43200 },
 };
 
 const EXTRA_PROVIDERS: Array<{ id: string; label: string; balance?: string }> = [
@@ -159,6 +350,9 @@ const EXTRA_PROVIDERS: Array<{ id: string; label: string; balance?: string }> = 
   { id: "fireworks", label: "Fireworks AI", balance: "$12.00" },
 ];
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const HISTORICAL_WINDOW_MS = 30 * MS_PER_DAY;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -173,62 +367,6 @@ function roundCost(value: number): number {
 
 function totalTokens(tokens: TokenCounts): number {
   return tokens.input + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0) + tokens.output;
-}
-
-function createLongContextTokens(rng: DemoRng): TokenCounts {
-  return {
-    input: 240_000 + Math.floor(rng.range(0, 40_000)),
-    output: 4_000 + Math.floor(rng.range(0, 6_000)),
-  };
-}
-
-function createStreamCostBreakdown(
-  baseCost: number,
-  inputTokens: number,
-  outputTokens: number,
-  longContextTokens?: TokenCounts,
-): { costUsd: number; costBreakdown: StreamCostBreakdown } {
-  const baseInputCost = baseCost * 0.55;
-  const baseOutputCost = baseCost - baseInputCost;
-  const inputRate = baseInputCost / (inputTokens / 1_000_000);
-  const outputRate = baseOutputCost / (outputTokens / 1_000_000);
-
-  const longContextInputCost = longContextTokens
-    ? (longContextTokens.input / 1_000_000) * inputRate * 2
-    : 0;
-  const longContextOutputCost = longContextTokens
-    ? (longContextTokens.output / 1_000_000) * outputRate * 2
-    : 0;
-  const total = baseCost + longContextInputCost + longContextOutputCost;
-
-  return {
-    costUsd: roundCost(total),
-    costBreakdown: {
-      total: roundCost(total),
-      input: roundCost(baseInputCost + longContextInputCost),
-      output: roundCost(baseOutputCost + longContextOutputCost),
-    },
-  };
-}
-
-function createWindowedTokens(
-  inputTokens: number,
-  outputTokens: number,
-  longContextTokens?: TokenCounts,
-): StreamWindowedTokens {
-  const baseTotalTokens = totalTokens({ input: inputTokens, output: outputTokens });
-  const longContextTotalTokens = longContextTokens ? totalTokens(longContextTokens) : 0;
-
-  return {
-    dayTokens: baseTotalTokens,
-    weekTokens: baseTotalTokens,
-    monthTokens: baseTotalTokens,
-    totalTokens: baseTotalTokens,
-    ...(longContextTotalTokens > 0 ? { longContextDayTokens: longContextTotalTokens } : {}),
-    ...(longContextTotalTokens > 0 ? { longContextWeekTokens: longContextTotalTokens } : {}),
-    ...(longContextTotalTokens > 0 ? { longContextMonthTokens: longContextTotalTokens } : {}),
-    ...(longContextTotalTokens > 0 ? { longContextTotalTokens } : {}),
-  };
 }
 
 class DemoRng {
@@ -258,6 +396,219 @@ class DemoRng {
   }
 }
 
+function pickWeighted<T extends { weight: number }>(rng: DemoRng, items: T[]): T {
+  let total = 0;
+  for (const item of items) total += item.weight;
+  let r = rng.next() * total;
+  for (const item of items) {
+    r -= item.weight;
+    if (r <= 0) return item;
+  }
+  return items[items.length - 1]!;
+}
+
+function pickAgent(rng: DemoRng): AgentConfig {
+  return pickWeighted(rng, AGENT_POOL);
+}
+
+function pickModelForAgent(rng: DemoRng, agent: AgentConfig): ModelConfig {
+  const allowed = agent.allowedProviders
+    ? MODEL_POOL.filter((m) => agent.allowedProviders!.has(m.providerId))
+    : MODEL_POOL;
+  return pickWeighted(rng, allowed);
+}
+
+function pickProject(rng: DemoRng): ProjectConfig {
+  return pickWeighted(rng, PROJECT_POOL);
+}
+
+function pickSessionName(rng: DemoRng): string {
+  const verbIndex = Math.floor(rng.next() * SESSION_NAME_VERBS.length);
+  const subjectIndex = Math.floor(rng.next() * SESSION_NAME_SUBJECTS.length);
+  return `${SESSION_NAME_VERBS[verbIndex]} ${SESSION_NAME_SUBJECTS[subjectIndex]}`;
+}
+
+function paretoBounded(rng: DemoRng, scale: number, alpha: number, maxValue: number): number {
+  const u = clamp(rng.next(), 1e-6, 1 - 1e-6);
+  const draw = scale * (1 - u) ** (-1 / alpha);
+  return Math.min(maxValue, draw);
+}
+
+interface GeneratedSession {
+  aggregate: AgentSessionAggregate;
+  isActive: boolean;
+}
+
+function buildSession(
+  index: number,
+  parentRng: DemoRng,
+  preset: DemoPreset,
+  presetConfig: DemoPresetConfig,
+  now: number,
+  isActive: boolean,
+  anchors: {
+    startOfDay: number;
+    startOfWeek: number;
+    startOfMonth: number;
+  },
+): GeneratedSession {
+  const rng = parentRng.fork(index);
+
+  const agent = pickAgent(rng);
+  const model = pickModelForAgent(rng, agent);
+  const project = pickProject(rng);
+  const sessionName = pickSessionName(rng);
+
+  let startedAt: number;
+  let lastActivityAt: number;
+  let endedAt: number | undefined;
+
+  if (isActive) {
+    startedAt = now - rng.range(5, 120) * 60 * 1000;
+    lastActivityAt = now - Math.floor(rng.range(0, 55) * 1000);
+  } else {
+    // Recency-biased spread over 30d: u^1.8 concentrates near 0 (recent), tail to 30d.
+    const recencyBias = rng.next() ** 1.8;
+    const minAgeMs = 2 * 60 * 1000;
+    const ageMs = minAgeMs + recencyBias * (HISTORICAL_WINDOW_MS - minAgeMs);
+    const durationMs = rng.range(30 * 1000, 45 * 60 * 1000);
+    lastActivityAt = now - ageMs;
+    startedAt = lastActivityAt - durationMs;
+    endedAt = lastActivityAt;
+  }
+
+  const baseTokens = Math.floor(paretoBounded(rng, presetConfig.tokenScale, 1.35, 600_000));
+  const inputTokens = Math.max(1, Math.floor(baseTokens * rng.range(0.55, 0.8)));
+  const outputTokens = Math.max(1, baseTokens - inputTokens);
+
+  const longContextRoll = rng.next();
+  const hasLongContext = preset !== "light" && baseTokens > 4_000 && longContextRoll < 0.18;
+  const longContextTokens: TokenCounts | undefined = hasLongContext
+    ? {
+        input: 180_000 + Math.floor(rng.range(0, 120_000)),
+        output: 2_500 + Math.floor(rng.range(0, 9_500)),
+      }
+    : undefined;
+
+  const cacheReadTokens = Math.floor(rng.next() < 0.6 ? baseTokens * rng.range(0, 3) : 0);
+  const cacheWriteTokens = Math.floor(cacheReadTokens * rng.range(0.08, 0.25));
+
+  const inputCost = (inputTokens / 1_000_000) * model.inputRate;
+  const outputCost = (outputTokens / 1_000_000) * model.outputRate;
+  const cacheReadCost = (cacheReadTokens / 1_000_000) * (model.cacheReadRate ?? 0);
+  const cacheWriteCost = (cacheWriteTokens / 1_000_000) * (model.cacheWriteRate ?? 0);
+  const longCtxInputCost = longContextTokens
+    ? (longContextTokens.input / 1_000_000) * model.inputRate * 2
+    : 0;
+  const longCtxOutputCost = longContextTokens
+    ? (longContextTokens.output / 1_000_000) * model.outputRate * 2
+    : 0;
+
+  const totalCost = roundCost(
+    inputCost + outputCost + cacheReadCost + cacheWriteCost + longCtxInputCost + longCtxOutputCost,
+  );
+
+  const breakdown: StreamCostBreakdown = {
+    total: totalCost,
+    input: roundCost(inputCost + longCtxInputCost),
+    output: roundCost(outputCost + longCtxOutputCost),
+  };
+  if (cacheReadTokens > 0) breakdown.cacheRead = roundCost(cacheReadCost);
+  if (cacheWriteTokens > 0) breakdown.cacheWrite = roundCost(cacheWriteCost);
+
+  const requestCount = Math.max(1, Math.floor((inputTokens + outputTokens) / rng.range(650, 1400)));
+  const longContextRequestCount = hasLongContext ? 1 : 0;
+
+  const totalsInput = hasLongContext ? inputTokens + (longContextTokens?.input ?? 0) : inputTokens;
+  const totalsOutput = hasLongContext
+    ? outputTokens + (longContextTokens?.output ?? 0)
+    : outputTokens;
+
+  const totals: TokenCounts = {
+    input: totalsInput,
+    output: totalsOutput,
+  };
+  if (cacheReadTokens > 0) totals.cacheRead = cacheReadTokens;
+  if (cacheWriteTokens > 0) totals.cacheWrite = cacheWriteTokens;
+
+  const stream: AgentSessionStream = {
+    providerId: model.providerId,
+    modelId: model.modelId,
+    tokens: { input: inputTokens, output: outputTokens },
+    requestCount: requestCount + longContextRequestCount,
+    costUsd: totalCost,
+    costBreakdown: breakdown,
+    pricingSource: "fallback",
+  };
+  if (hasLongContext && longContextTokens) {
+    stream.longContextTokens = longContextTokens;
+    stream.longContextRequestCount = longContextRequestCount;
+    stream.hasLongContext = true;
+  }
+
+  const windowedBase = totalTokens({ input: inputTokens, output: outputTokens });
+  const longContextTotalTokens = longContextTokens ? totalTokens(longContextTokens) : 0;
+  const windowedTokens: StreamWindowedTokens = {
+    dayTokens: lastActivityAt >= anchors.startOfDay ? windowedBase : 0,
+    weekTokens: lastActivityAt >= anchors.startOfWeek ? windowedBase : 0,
+    monthTokens: lastActivityAt >= anchors.startOfMonth ? windowedBase : 0,
+    totalTokens: windowedBase,
+  };
+  if (longContextTotalTokens > 0) {
+    windowedTokens.longContextDayTokens =
+      lastActivityAt >= anchors.startOfDay ? longContextTotalTokens : 0;
+    windowedTokens.longContextWeekTokens =
+      lastActivityAt >= anchors.startOfWeek ? longContextTotalTokens : 0;
+    windowedTokens.longContextMonthTokens =
+      lastActivityAt >= anchors.startOfMonth ? longContextTotalTokens : 0;
+    windowedTokens.longContextTotalTokens = longContextTotalTokens;
+  }
+
+  const costInDay = lastActivityAt >= anchors.startOfDay ? totalCost : 0;
+  const costInWeek = lastActivityAt >= anchors.startOfWeek ? totalCost : 0;
+  const costInMonth = lastActivityAt >= anchors.startOfMonth ? totalCost : 0;
+
+  const status: "active" | "idle" = isActive ? (index % 3 === 0 ? "idle" : "active") : "idle";
+
+  const sessionId = `demo-${agent.id}-${String(index).padStart(5, "0")}`;
+
+  const aggregate: AgentSessionAggregate = {
+    sessionId,
+    sessionName,
+    agentId: agent.id,
+    agentName: agent.name,
+    projectPath: project.path,
+    startedAt,
+    lastActivityAt,
+    status,
+    totals,
+    totalCostUsd: totalCost,
+    requestCount: requestCount + longContextRequestCount,
+    streams: [stream],
+    costInDay,
+    costInWeek,
+    costInMonth,
+    _streamWindowedTokens: new Map([[`${model.providerId}::${model.modelId}`, windowedTokens]]),
+  };
+  if (endedAt !== undefined) {
+    aggregate.endedAt = endedAt;
+  }
+
+  return { aggregate, isActive };
+}
+
+function computeTimeAnchors(now: number): {
+  startOfDay: number;
+  startOfWeek: number;
+  startOfMonth: number;
+} {
+  const d = new Date(now);
+  const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const startOfWeek = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay()).getTime();
+  const startOfMonth = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  return { startOfDay, startOfWeek, startOfMonth };
+}
+
 export interface DemoSimulatorSnapshot {
   sessions: AgentSessionAggregate[];
   providerUsage: Map<string, ProviderUsageData>;
@@ -271,7 +622,8 @@ export interface DemoSimulatorOptions {
 
 export class DemoSimulator {
   private rng: DemoRng;
-  private sessions: AgentSessionAggregate[];
+  private activeSessions: AgentSessionAggregate[];
+  private readonly historicalSessions: AgentSessionAggregate[];
   private providerUsage: Map<string, ProviderUsageData>;
   private lastTick: number;
   private readonly startTime: number;
@@ -287,179 +639,87 @@ export class DemoSimulator {
     this.rng = new DemoRng(seed);
     const now = Date.now();
     this.startTime = now;
+    this.lastTick = now;
 
-    const sessionCount = Math.min(this.presetConfig.sessionCount, DEFAULT_SESSIONS.length);
+    const anchors = computeTimeAnchors(now);
+    const sessionCount = this.presetConfig.sessionCount;
+    // Keep 4–8 truly active sessions regardless of preset scale so the
+    // burn-rate / sparkline feedback loops still animate on tick().
+    const activeCount = clamp(
+      4 + Math.floor(this.presetConfig.activityMultiplier * 2),
+      4,
+      Math.min(8, sessionCount),
+    );
 
-    // Select sessions: include a mix of inactive history and active sessions per preset size.
-    const inactiveSessions = DEFAULT_SESSIONS.filter((s) => s.inactive ?? false);
-    const activeSessions = DEFAULT_SESSIONS.filter((s) => !(s.inactive ?? false));
-    const desiredInactive = Math.max(1, Math.round(sessionCount * 0.3));
-    let inactiveCount = Math.min(inactiveSessions.length, desiredInactive);
-    if (activeSessions.length > 0) {
-      inactiveCount = Math.min(inactiveCount, sessionCount - 1);
-    }
-    const activeCount = Math.min(activeSessions.length, sessionCount - inactiveCount);
-    if (activeCount + inactiveCount < sessionCount) {
-      inactiveCount = Math.min(inactiveSessions.length, sessionCount - activeCount);
-    }
+    const genRng = this.rng.fork(1);
+    const active: AgentSessionAggregate[] = [];
+    const historical: AgentSessionAggregate[] = [];
 
-    const selectedSessions = [
-      ...activeSessions.slice(0, activeCount),
-      ...inactiveSessions.slice(0, inactiveCount),
-    ];
-
-    const longContextSessionIndexes = this.pickLongContextSessionIndexes(selectedSessions);
-
-    this.sessions = selectedSessions.map((seedSession, index) => {
-      const tokens = seedSession.baseTokens;
-      const inputTokens = Math.floor(tokens * 0.6);
-      const outputTokens = tokens - inputTokens;
-      const hasLongContext = longContextSessionIndexes.has(index);
-      const longContextTokens = hasLongContext
-        ? createLongContextTokens(this.rng.fork(hashCombine(index + 1, seedSession.baseTokens)))
-        : undefined;
-      const { costUsd, costBreakdown } = createStreamCostBreakdown(
-        seedSession.baseCost,
-        inputTokens,
-        outputTokens,
-        longContextTokens,
+    for (let i = 0; i < sessionCount; i++) {
+      const isActive = i < activeCount;
+      const { aggregate } = buildSession(
+        i,
+        genRng,
+        this.preset,
+        this.presetConfig,
+        now,
+        isActive,
+        anchors,
       );
-      const streamWindowedTokens = createWindowedTokens(
-        inputTokens,
-        outputTokens,
-        longContextTokens,
-      );
-      const requestCount = Math.max(1, Math.floor(tokens / 800));
-      const longContextRequestCount = hasLongContext ? 1 : 0;
-      const stream: AgentSessionStream = {
-        providerId: seedSession.providerId,
-        modelId: seedSession.modelId,
-        tokens: { input: inputTokens, output: outputTokens },
-        requestCount: requestCount + longContextRequestCount,
-        costUsd,
-        costBreakdown,
-        pricingSource: "fallback",
-      };
-      if (hasLongContext && longContextTokens) {
-        stream.longContextTokens = longContextTokens;
-        stream.longContextRequestCount = longContextRequestCount;
-        stream.hasLongContext = true;
-      }
-      const streams: AgentSessionStream[] = [stream];
+      if (isActive) active.push(aggregate);
+      else historical.push(aggregate);
+    }
 
-      const isInactive = seedSession.inactive ?? false;
-      const startedAt = isInactive
-        ? now - this.rng.range(3, 7) * 24 * 60 * 60 * 1000
-        : now - (index + 1) * 45 * 60 * 1000;
-      const lastActivityAt = isInactive
-        ? startedAt + this.rng.range(30, 120) * 60 * 1000
-        : now - this.rng.range(10_000, 50_000);
+    this.activeSessions = active;
+    this.historicalSessions = historical;
 
-      const nowDate = new Date(now);
-      const startOfDay = new Date(
-        nowDate.getFullYear(),
-        nowDate.getMonth(),
-        nowDate.getDate(),
-      ).getTime();
-      const dayOfWeek = nowDate.getDay();
-      const startOfWeek = new Date(
-        nowDate.getFullYear(),
-        nowDate.getMonth(),
-        nowDate.getDate() - dayOfWeek,
-      ).getTime();
-      const startOfMonth = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1).getTime();
-
-      const costInDay = lastActivityAt >= startOfDay ? costUsd : 0;
-      const costInWeek = lastActivityAt >= startOfWeek ? costUsd : 0;
-      const costInMonth = lastActivityAt >= startOfMonth ? costUsd : 0;
-
-      const baseSession: Omit<AgentSessionAggregate, "endedAt"> = {
-        sessionId: seedSession.sessionId,
-        agentId: seedSession.agentId,
-        agentName: seedSession.agentName,
-        projectPath: seedSession.projectPath,
-        startedAt,
-        lastActivityAt,
-        status: isInactive ? "idle" : index % 3 === 0 ? "idle" : "active",
-        totals: {
-          input: hasLongContext ? inputTokens + (longContextTokens?.input ?? 0) : inputTokens,
-          output: hasLongContext ? outputTokens + (longContextTokens?.output ?? 0) : outputTokens,
-          cacheRead: Math.floor(tokens * 0.05),
-          cacheWrite: Math.floor(tokens * 0.02),
-        },
-        totalCostUsd: costUsd,
-        requestCount: requestCount + longContextRequestCount,
-        streams,
-        costInDay,
-        costInWeek,
-        costInMonth,
-        _streamWindowedTokens: new Map([
-          [`${seedSession.providerId}::${seedSession.modelId}`, streamWindowedTokens],
-        ]),
-      };
-      if (seedSession.sessionName) {
-        baseSession.sessionName = seedSession.sessionName;
-      }
-
-      return isInactive ? { ...baseSession, endedAt: lastActivityAt } : baseSession;
-    });
-
-    const sessionProviderIds = new Set(selectedSessions.map((s) => s.providerId));
-    this.fixedProviderIds = Array.from(sessionProviderIds);
+    const providerIds = new Set<string>();
+    for (const session of this.getAllSessions()) {
+      for (const stream of session.streams) providerIds.add(stream.providerId);
+    }
+    this.fixedProviderIds = Array.from(providerIds);
 
     const extraCount = Math.min(this.presetConfig.extraProviderCount, EXTRA_PROVIDERS.length);
-    this.fixedExtraProviders = EXTRA_PROVIDERS.slice(0, extraCount);
+    this.fixedExtraProviders = EXTRA_PROVIDERS.slice(0, extraCount).filter(
+      (p) => !providerIds.has(p.id),
+    );
 
     this.providerUsage = new Map();
-    this.lastTick = now;
     this.initializeProviderUsage(now);
   }
 
-  private pickLongContextSessionIndexes(selectedSessions: DemoSessionSeed[]): Set<number> {
-    if (this.preset === "light") {
-      return new Set();
-    }
-
-    const activeIndexes = selectedSessions
-      .map((session, index) => ({ session, index }))
-      .filter(({ session }) => !(session.inactive ?? false))
-      .map(({ index }) => index);
-
-    const targetCount = this.preset === "normal" ? 1 : Math.min(2, activeIndexes.length);
-    const ranked = activeIndexes
-      .map((index) => ({
-        index,
-        score: this.rng
-          .fork(hashCombine(1_000 + index, selectedSessions[index]!.baseTokens))
-          .next(),
-      }))
-      .sort((a, b) => b.score - a.score || a.index - b.index);
-
-    return new Set(ranked.slice(0, targetCount).map(({ index }) => index));
+  private getAllSessions(): AgentSessionAggregate[] {
+    return [...this.activeSessions, ...this.historicalSessions];
   }
 
-  private initializeProviderUsage(now: number) {
-    const providerTotals = new Map<string, { tokens: number; cost: number; requests: number }>();
-    for (const session of this.sessions) {
+  private aggregateProviderTotals(): Map<
+    string,
+    { tokens: number; cost: number; requests: number }
+  > {
+    const totals = new Map<string, { tokens: number; cost: number; requests: number }>();
+    for (const session of this.getAllSessions()) {
       for (const stream of session.streams) {
-        const current = providerTotals.get(stream.providerId) ?? {
-          tokens: 0,
-          cost: 0,
-          requests: 0,
-        };
+        const current = totals.get(stream.providerId) ?? { tokens: 0, cost: 0, requests: 0 };
         const streamTokens = stream.tokens.input + stream.tokens.output;
-        providerTotals.set(stream.providerId, {
+        totals.set(stream.providerId, {
           tokens: current.tokens + streamTokens,
           cost: current.cost + (stream.costUsd ?? 0),
           requests: current.requests + stream.requestCount,
         });
       }
     }
+    return totals;
+  }
+
+  private initializeProviderUsage(now: number) {
+    const providerTotals = this.aggregateProviderTotals();
 
     for (const providerId of this.fixedProviderIds) {
       const totals = providerTotals.get(providerId) ?? { tokens: 0, cost: 0, requests: 0 };
       const limit = PROVIDER_LIMITS[providerId] ?? { label: "Daily Tokens", windowMinutes: 1440 };
-      const usedPercent = clamp((totals.tokens / 50_000) * 100, 5, 98);
+      // Scale the "used %" relative to preset so heavy looks busy but never maxed by default.
+      const scaleDivisor = this.presetConfig.sessionCount * 12_000;
+      const usedPercent = clamp((totals.tokens / scaleDivisor) * 100, 5, 98);
       const limitReached = usedPercent > 95;
 
       this.providerUsage.set(providerId, {
@@ -498,8 +758,9 @@ export class DemoSimulator {
     }
 
     const [minUsage, maxUsage] = this.presetConfig.usageRange;
+    const extraRng = this.rng.fork(2);
     for (const provider of this.fixedExtraProviders) {
-      const usedPercent = clamp(this.rng.range(minUsage, maxUsage), 5, 98);
+      const usedPercent = clamp(extraRng.range(minUsage, maxUsage), 5, 98);
       this.providerUsage.set(provider.id, {
         planType: provider.label,
         limitReached: usedPercent > 95,
@@ -535,27 +796,13 @@ export class DemoSimulator {
   }
 
   private updateProviderUsage(now: number, tickRng: DemoRng) {
-    const providerTotals = new Map<string, { tokens: number; cost: number; requests: number }>();
-    for (const session of this.sessions) {
-      for (const stream of session.streams) {
-        const current = providerTotals.get(stream.providerId) ?? {
-          tokens: 0,
-          cost: 0,
-          requests: 0,
-        };
-        const streamTokens = stream.tokens.input + stream.tokens.output;
-        providerTotals.set(stream.providerId, {
-          tokens: current.tokens + streamTokens,
-          cost: current.cost + (stream.costUsd ?? 0),
-          requests: current.requests + stream.requestCount,
-        });
-      }
-    }
+    const providerTotals = this.aggregateProviderTotals();
 
     for (const providerId of this.fixedProviderIds) {
       const totals = providerTotals.get(providerId) ?? { tokens: 0, cost: 0, requests: 0 };
       const limit = PROVIDER_LIMITS[providerId] ?? { label: "Daily Tokens", windowMinutes: 1440 };
-      const usedPercent = clamp((totals.tokens / 50_000) * 100, 5, 98);
+      const scaleDivisor = this.presetConfig.sessionCount * 12_000;
+      const usedPercent = clamp((totals.tokens / scaleDivisor) * 100, 5, 98);
       const limitReached = usedPercent > 95;
 
       const existing = this.providerUsage.get(providerId);
@@ -639,11 +886,7 @@ export class DemoSimulator {
     const usageEvents: UsageEventInsert[] = [];
     const activityMultiplier = this.presetConfig.activityMultiplier;
 
-    this.sessions = this.sessions.map((session, sessionIndex) => {
-      if (session.endedAt !== undefined) {
-        return session;
-      }
-
+    this.activeSessions = this.activeSessions.map((session, sessionIndex) => {
       const sessionRng = tickRng.fork(sessionIndex);
       const isIdle = sessionRng.next() < this.presetConfig.idleProbability;
       if (isIdle) {
@@ -712,7 +955,7 @@ export class DemoSimulator {
     this.updateProviderUsage(now, tickRng);
 
     return {
-      sessions: this.sessions,
+      sessions: [...this.activeSessions, ...this.historicalSessions],
       providerUsage: new Map(this.providerUsage),
       usageEvents,
     };
@@ -742,10 +985,13 @@ export class DemoSimulator {
       requests: number;
     }> = [];
 
-    const providerShares = [
-      { id: "anthropic", share: 0.5 },
-      { id: "openai", share: 0.25 },
-      { id: "google-gemini", share: 0.15 },
+    const providerShares: Array<{ id: string; share: number }> = [
+      { id: "anthropic", share: 0.55 },
+      { id: "openai", share: 0.18 },
+      { id: "google-gemini", share: 0.12 },
+      { id: "xai", share: 0.06 },
+      { id: "github-copilot", share: 0.05 },
+      { id: "minimax", share: 0.04 },
     ];
 
     const providerRng = this.rng.fork(88888);
@@ -790,11 +1036,16 @@ export class DemoSimulator {
       requests: number;
     }> = [];
 
-    const modelShares = [
-      { id: "claude-3-5-sonnet", share: 0.4 },
-      { id: "claude-3-opus", share: 0.2 },
-      { id: "gpt-4.1", share: 0.25 },
-      { id: "gemini-2.0-pro", share: 0.15 },
+    const modelShares: Array<{ id: string; share: number }> = [
+      { id: "claude-opus-4-7", share: 0.34 },
+      { id: "claude-sonnet-4-20250514", share: 0.16 },
+      { id: "grok-code-fast-1", share: 0.12 },
+      { id: "claude-3-5-sonnet-20241022", share: 0.1 },
+      { id: "gpt-4.1", share: 0.08 },
+      { id: "gemini-2.5-pro", share: 0.07 },
+      { id: "claude-3-5-haiku-20241022", share: 0.05 },
+      { id: "gpt-4o", share: 0.04 },
+      { id: "minimax-m2.5-free", share: 0.04 },
     ];
 
     const modelRng = this.rng.fork(77777);
@@ -839,11 +1090,10 @@ export class DemoSimulator {
       requests: number;
     }> = [];
 
-    const projectShares = [
-      { path: "/Users/demo/workspace/tokentop", share: 0.45 },
-      { path: "/Users/demo/workspace/webapp", share: 0.3 },
-      { path: "/Users/demo/workspace/infra", share: 0.25 },
-    ];
+    const totalWeight = PROJECT_POOL.reduce((sum, p) => sum + p.weight, 0);
+    const projectShares: Array<{ path: string; share: number }> = PROJECT_POOL.slice(0, 8).map(
+      (p) => ({ path: p.path, share: p.weight / totalWeight }),
+    );
 
     const projectRng = this.rng.fork(66666);
 
@@ -878,13 +1128,12 @@ export class DemoSimulator {
   generateHistoricalCostData(daysBack: number): Array<{ date: number; cost: number }> {
     const historyRng = this.rng.fork(99999);
     const now = Date.now();
-    const msPerDay = 24 * 60 * 60 * 1000;
     const result: Array<{ date: number; cost: number }> = [];
 
-    const baseCost = this.presetConfig.activityMultiplier * 2.5;
+    const baseCost = this.presetConfig.historicalDailyCostBase;
 
     for (let i = daysBack - 1; i >= 0; i--) {
-      const dayTimestamp = now - i * msPerDay;
+      const dayTimestamp = now - i * MS_PER_DAY;
       const dayRng = historyRng.fork(i);
 
       const isWeekend = new Date(dayTimestamp).getDay() % 6 === 0;
