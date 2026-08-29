@@ -5,8 +5,8 @@
     "": {
       "name": "@tokentop/ttop",
       "dependencies": {
-        "@opentui/core": "0.5.7",
-        "@opentui/react": "0.5.7",
+        "@opentui/core": "0.5.9",
+        "@opentui/react": "0.5.9",
         "@tokentop/agent-claude-code": "^1.1.0",
         "@tokentop/agent-copilot-cli": "^1.0.0",
         "@tokentop/agent-cursor": "^1.2.0",
@@ -46,25 +46,25 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.4", "", { "os": "win32", "cpu": "x64" }, "sha512-gnOHKVPFAAPrpoPt2t+Q6FZ7RPry/FDV3GcpU53P3PtLNnQjBmKyN2Vh/JtqXet+H4pme8CC76rScwdjDcT1/A=="],
 
-    "@opentui/core": ["@opentui/core@0.5.7", "", { "dependencies": { "bun-ffi-structs": "0.3.1", "diff": "9.0.0", "marked": "17.0.1", "string-width": "7.2.0", "strip-ansi": "7.1.2" }, "optionalDependencies": { "@opentui/core-darwin-arm64": "0.5.7", "@opentui/core-darwin-x64": "0.5.7", "@opentui/core-linux-arm64": "0.5.7", "@opentui/core-linux-arm64-musl": "0.5.7", "@opentui/core-linux-x64": "0.5.7", "@opentui/core-linux-x64-musl": "0.5.7", "@opentui/core-win32-arm64": "0.5.7", "@opentui/core-win32-x64": "0.5.7" }, "peerDependencies": { "web-tree-sitter": "0.25.10" } }, "sha512-/XDabTkfBs2Wy2FhlC4jvzbpphYAs4SlnCRKYEvi+metlXNTSAshSs43wqZ9O4IPd0E4EcQqdfeQ0sdc3yPpYw=="],
+    "@opentui/core": ["@opentui/core@0.5.9", "", { "dependencies": { "bun-ffi-structs": "0.3.1", "diff": "9.0.0", "marked": "17.0.1", "string-width": "7.2.0", "strip-ansi": "7.1.2" }, "optionalDependencies": { "@opentui/core-darwin-arm64": "0.5.9", "@opentui/core-darwin-x64": "0.5.9", "@opentui/core-linux-arm64": "0.5.9", "@opentui/core-linux-arm64-musl": "0.5.9", "@opentui/core-linux-x64": "0.5.9", "@opentui/core-linux-x64-musl": "0.5.9", "@opentui/core-win32-arm64": "0.5.9", "@opentui/core-win32-x64": "0.5.9" }, "peerDependencies": { "web-tree-sitter": "0.25.10" } }, "sha512-d0EWYyp6djitu1N1R0o75NrLl4TxY3oJEmRNrX9vSKKC5/jriGQdSV6lJmwiB77O0cxtBnPzWztAV79vA1J2fA=="],
 
-    "@opentui/core-darwin-arm64": ["@opentui/core-darwin-arm64@0.5.7", "", { "os": "darwin", "cpu": "arm64" }, "sha512-75TDJgFD6hDoCElIX35Yg3TIRF/jhrtVQO/9snhjGuTsZ7bd0W88jUlvSXSNhqB3CX431rwgi47B+asWPDI1lQ=="],
+    "@opentui/core-darwin-arm64": ["@opentui/core-darwin-arm64@0.5.9", "", { "os": "darwin", "cpu": "arm64" }, "sha512-YcpWGD8GwoO3UYYw0kLDI4qof3ElSwWW5M3fNG+Kw87BSjCa5frZqak5xebdZ/XU5Xsk+BjgbBsxbzo9yrIjZQ=="],
 
-    "@opentui/core-darwin-x64": ["@opentui/core-darwin-x64@0.5.7", "", { "os": "darwin", "cpu": "x64" }, "sha512-j+Dwu2yV8zahBFjnVIssYdPrHz/+pkd7xWxI+nHjV41V3c+scvH6vJY1U85VCVaoQs/zCH5xAJbmAAn7Sgeh8g=="],
+    "@opentui/core-darwin-x64": ["@opentui/core-darwin-x64@0.5.9", "", { "os": "darwin", "cpu": "x64" }, "sha512-xgdZwgcwlDCqi0WPCS1d0GVSd+oKDFX+UVE1ZPei8u8W3pirXGSExxVHNku7QbEYCRvpCeMtoKIa6xN9cVTsoQ=="],
 
-    "@opentui/core-linux-arm64": ["@opentui/core-linux-arm64@0.5.7", "", { "os": "linux", "cpu": "arm64" }, "sha512-gWO9NWaivXRPc0XhEbxehj3ApyC1SW8Bf1cnHnME1zhw/EZNCNE3TQHgKwOnnNKtvlbhzLQjOI4OqyPYV8UcEQ=="],
+    "@opentui/core-linux-arm64": ["@opentui/core-linux-arm64@0.5.9", "", { "os": "linux", "cpu": "arm64" }, "sha512-vHBiJp69wMaL+fRMDpnXCCIpPyQRPZEWCWBatnblUUGIWUseqeQlaPow6ljHSbgAd/GjygAf4tFCyTqNT2ezZA=="],
 
-    "@opentui/core-linux-arm64-musl": ["@opentui/core-linux-arm64-musl@0.5.7", "", { "os": "linux", "cpu": "arm64" }, "sha512-RumSHTasIAWU7jPBKiTuEZG/m+prfQKCHhL3JAQnBLgp7eAB20XZGfSLVWDBgxkyKq1rHCUgLtZktC5ZAyKfTA=="],
+    "@opentui/core-linux-arm64-musl": ["@opentui/core-linux-arm64-musl@0.5.9", "", { "os": "linux", "cpu": "arm64" }, "sha512-A7GW4NCTInj2vy3X2gVO2Sm8jllgdLxwPdOklPqyl+xqivQtyG9qwS5YXoCk9fBJt10ORhYKETEjYEnIE5xvMQ=="],
 
-    "@opentui/core-linux-x64": ["@opentui/core-linux-x64@0.5.7", "", { "os": "linux", "cpu": "x64" }, "sha512-fXDmrIlfp9xaoVkk3BNn3yUO/b7plBSOfUh2oWOezRA6E/g5z+hTO1alGFQCy+VV+1kfA6iuYadAww0xNtfACg=="],
+    "@opentui/core-linux-x64": ["@opentui/core-linux-x64@0.5.9", "", { "os": "linux", "cpu": "x64" }, "sha512-rdw7QVopVHwj6fMrJc7hPGVaYg2V5NBlW3MUfkrQBlUlo/87OC4aYDAh5oRIL1CIFD9LjDdh7hwmUNbn/K9Pcw=="],
 
-    "@opentui/core-linux-x64-musl": ["@opentui/core-linux-x64-musl@0.5.7", "", { "os": "linux", "cpu": "x64" }, "sha512-1opDV+W7C1F4iWivCNKuYl5Hen+IeFXAuUPm3hVyN0UtdcP8LESpFJTr8QRwHpGSE9Jz1K2g2S2ipzI3u5mhgw=="],
+    "@opentui/core-linux-x64-musl": ["@opentui/core-linux-x64-musl@0.5.9", "", { "os": "linux", "cpu": "x64" }, "sha512-J4wQs1OMPZ4hR93Op1C/BLFmIta2mUJm4M7djevlgcWcal4RSNO4V8QvUXfogWGci+ADZqEmX2osQQDY5NVJpw=="],
 
-    "@opentui/core-win32-arm64": ["@opentui/core-win32-arm64@0.5.7", "", { "os": "win32", "cpu": "arm64" }, "sha512-gbiZUyttjq8s+bsnsaopygWN7LTS/RyzD6GOmpgOB2TVitvo0P6mxM+AebBGuu/7xri17Rqaxf3uqrgdKiJAeg=="],
+    "@opentui/core-win32-arm64": ["@opentui/core-win32-arm64@0.5.9", "", { "os": "win32", "cpu": "arm64" }, "sha512-OnmEsGLWwsHrm6sTsWSSesu4LGjSV1JNWqCsEItbuitWaqH6rXdSahSc5jMFsS57bZxUyaRz01yAqiZzUSXnVQ=="],
 
-    "@opentui/core-win32-x64": ["@opentui/core-win32-x64@0.5.7", "", { "os": "win32", "cpu": "x64" }, "sha512-bDwon45lUxbV3rMcekTCg4mXcBu9uhdG6HLeLK5TVZf05/h+Ibkf2UeZ8A2jjQt+MK6jpYmxWwDCVCTzZ7EU7Q=="],
+    "@opentui/core-win32-x64": ["@opentui/core-win32-x64@0.5.9", "", { "os": "win32", "cpu": "x64" }, "sha512-/CnAIfKL7+ZeGLyZoXV5zS71Nd8Zn97RUir2DAIY05MJozmfg5s7XOAdUNYuK1cg5mbwlAuqeAsfbuWUAEe15g=="],
 
-    "@opentui/react": ["@opentui/react@0.5.7", "", { "dependencies": { "@opentui/core": "0.5.7", "react-reconciler": "^0.33.0" }, "peerDependencies": { "react": ">=19.2.0", "react-devtools-core": "^7.0.1", "ws": "^8.18.0" } }, "sha512-2d86PyrdMruIGTNW0NwAwURP3sW5BcIJksQJMC08FkNECbLlFD0RXngfAs/6Mz5m8uM/FyNfr/pbmPBe0wo3GQ=="],
+    "@opentui/react": ["@opentui/react@0.5.9", "", { "dependencies": { "@opentui/core": "0.5.9", "react-reconciler": "^0.33.0" }, "peerDependencies": { "react": ">=19.2.0", "react-devtools-core": "^7.0.1", "ws": "^8.18.0" } }, "sha512-MrJ0sIDmBOhF4q85yZABEfpd2mOPfSj3jA8WS/MPtySEOGy/0Aw3XZTh9wgFvivGk/qGVJK0s4YY+iLwudIYQg=="],
 
     "@tokentop/agent-claude-code": ["@tokentop/agent-claude-code@1.1.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-mzR9NUAgd9p88zUxZtnhYgxqUGEfr8N3A25D2wGfojkPVAda0DTwTHeUXTLyXMabTSyWz+7vuqLoyXYA4Qpusw=="],
 
