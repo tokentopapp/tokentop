@@ -34,8 +34,8 @@
     "analytics": "bun .opencode/skills/analytics/scripts/analytics.ts"
   },
   "dependencies": {
-    "@opentui/core": "0.5.9",
-    "@opentui/react": "0.5.9",
+    "@opentui/core": "0.5.10",
+    "@opentui/react": "0.5.10",
     "@tokentop/agent-claude-code": "^1.1.0",
     "@tokentop/agent-copilot-cli": "^1.0.0",
     "@tokentop/agent-cursor": "^1.2.0",
