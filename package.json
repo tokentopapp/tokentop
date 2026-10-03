@@ -11,6 +11,7 @@
   "files": [
     "bin/",
     "src/",
+    "tsconfig.json",
     "package.json",
     "README.md",
     "LICENSE"
