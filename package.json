@@ -43,7 +43,7 @@
     "@tokentop/agent-opencode": "^1.0.0",
     "@tokentop/plugin-sdk": "^1.5.0",
     "react": "^19.0.0",
-    "react-devtools-core": "^7.0.1",
+    "react-devtools-core": "^8.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
