@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/tokentopapp/tokentop/compare/v0.7.0...v0.8.0) (2026-10-04)
+
+
+### Features
+
+* **agents:** add Pi agent plugin as a built-in ([#116](https://github.com/tokentopapp/tokentop/issues/116)) ([88a59d1](https://github.com/tokentopapp/tokentop/commit/88a59d14905ca9d8d27b1a4a3dfa01632ae18d02))
+* **providers:** attribute Perplexity requests ([#112](https://github.com/tokentopapp/tokentop/issues/112)) ([369a89c](https://github.com/tokentopapp/tokentop/commit/369a89c0d5089ee8a08e7c779eeae240e80bc0a0))
+
+
+### Bug Fixes
+
+* **packaging:** include tsconfig in npm tarball ([#115](https://github.com/tokentopapp/tokentop/issues/115)) ([766a499](https://github.com/tokentopapp/tokentop/commit/766a499f130ca622a92ed4b8796e2673d72d5269))
+
 ## [0.7.0](https://github.com/tokentopapp/tokentop/compare/v0.6.1...v0.7.0) (2026-04-17)
 
 
