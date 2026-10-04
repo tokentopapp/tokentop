@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/tokentopapp/tokentop/compare/v0.8.0...v0.8.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* **release:** install web-tree-sitter peer so --compile builds succeed ([#118](https://github.com/tokentopapp/tokentop/issues/118)) ([95e5c9f](https://github.com/tokentopapp/tokentop/commit/95e5c9fd48058602e3223ecce01345c3fe031af8))
+
 ## [0.8.0](https://github.com/tokentopapp/tokentop/compare/v0.7.0...v0.8.0) (2026-10-04)
 
 
