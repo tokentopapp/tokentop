@@ -1,4 +1,5 @@
 import type { ModelPricing } from "@tokentop/plugin-sdk";
+import { runOutsidePluginGuard } from "../plugins/sandbox-guard.ts";
 
 const MODELS_DEV_API = "https://models.dev/api.json";
 const CACHE_TTL_MS = 3600000;
@@ -37,23 +38,39 @@ interface CachedData {
 }
 
 let cache: CachedData | null = null;
+let inFlightFetch: Promise<ModelsDevResponse | null> | null = null;
 
 export async function fetchModelsDevData(): Promise<ModelsDevResponse | null> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.data;
   }
 
-  try {
-    const response = await fetch(MODELS_DEV_API);
-    if (!response.ok) {
+  if (inFlightFetch) {
+    return inFlightFetch;
+  }
+
+  const request = (async (): Promise<ModelsDevResponse | null> => {
+    try {
+      const response = await runOutsidePluginGuard(() => fetch(MODELS_DEV_API));
+      if (!response.ok) {
+        return cache?.data ?? null;
+      }
+
+      const data = (await response.json()) as ModelsDevResponse;
+      cache = { data, fetchedAt: Date.now() };
+      return data;
+    } catch {
       return cache?.data ?? null;
     }
+  })();
+  inFlightFetch = request;
 
-    const data = (await response.json()) as ModelsDevResponse;
-    cache = { data, fetchedAt: Date.now() };
-    return data;
-  } catch {
-    return cache?.data ?? null;
+  try {
+    return await request;
+  } finally {
+    if (inFlightFetch === request) {
+      inFlightFetch = null;
+    }
   }
 }
 
