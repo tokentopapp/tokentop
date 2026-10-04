@@ -12,6 +12,7 @@
 ### Bug Fixes
 
 * **packaging:** include tsconfig in npm tarball ([#115](https://github.com/tokentopapp/tokentop/issues/115)) ([766a499](https://github.com/tokentopapp/tokentop/commit/766a499f130ca622a92ed4b8796e2673d72d5269))
+* **release:** install web-tree-sitter peer so --compile builds succeed ([#118](https://github.com/tokentopapp/tokentop/issues/118))
 
 ## [0.7.0](https://github.com/tokentopapp/tokentop/compare/v0.6.1...v0.7.0) (2026-04-17)
 
