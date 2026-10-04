@@ -44,6 +44,11 @@
       "groupName": "github actions",
       "commitMessagePrefix": "ci(deps):",
       "labels": ["dependencies", "ci"]
+    },
+    {
+      "description": "web-tree-sitter is only declared to satisfy @opentui/core's exact peer pin. Bumping it independently leaves the peer unmet, and bunfig's peer=false then omits it, breaking `bun build --compile`. Update it alongside @opentui/core.",
+      "matchPackageNames": ["web-tree-sitter"],
+      "enabled": false
     }
   ]
 }
