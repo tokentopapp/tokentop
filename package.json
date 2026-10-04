@@ -46,7 +46,7 @@
     "@tokentop/plugin-sdk": "^1.5.0",
     "react": "^19.0.0",
     "react-devtools-core": "^8.0.0",
-    "web-tree-sitter": "0.25.10",
+    "web-tree-sitter": "0.27.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
