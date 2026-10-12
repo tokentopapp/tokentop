@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/tokentopapp/tokentop/compare/v0.8.0...v0.8.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* fetch host pricing outside plugin sandbox ([#122](https://github.com/tokentopapp/tokentop/issues/122)) ([9e65857](https://github.com/tokentopapp/tokentop/commit/9e65857e292ec08d862a7373a29ac5f9fee784e0))
+* **tui:** prevent session rows from disappearing while scrolling ([#121](https://github.com/tokentopapp/tokentop/issues/121)) ([43a83b8](https://github.com/tokentopapp/tokentop/commit/43a83b89c894bef3359801e21bf458873db01d83))
+
 ## [0.8.0](https://github.com/tokentopapp/tokentop/compare/v0.7.0...v0.8.0) (2026-10-04)
 
 
