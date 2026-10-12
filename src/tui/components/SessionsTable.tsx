@@ -1,10 +1,10 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
-import { forwardRef, memo, type Ref, useCallback, useRef } from "react";
+import { forwardRef, memo, type Ref, useCallback } from "react";
 import type { AgentSessionAggregate } from "../../agents/types.ts";
 import { useColors } from "../contexts/ThemeContext.tsx";
 import { useAnimatedValue } from "../hooks/useAnimatedValue.ts";
-import { applyEntranceFade, useEntranceAnimation } from "../hooks/useEntranceAnimation.ts";
+import { applyEntranceFade } from "../hooks/useEntranceAnimation.ts";
 import { useExitAnimation } from "../hooks/useExitAnimation.ts";
 import { interpolateColor, useValueFlash } from "../hooks/useValueFlash.ts";
 import type { SortDirection, SortField } from "../types/sort.ts";
@@ -124,7 +124,6 @@ interface SessionRowProps {
   getProviderColor: (id: string) => string;
   isExiting?: boolean;
   exitIntensity?: number;
-  skipEntrance?: boolean;
   terminalWidth: number;
 }
 
@@ -144,18 +143,11 @@ const SessionRow = memo(function SessionRow({
   getProviderColor,
   isExiting,
   exitIntensity,
-  skipEntrance,
   terminalWidth,
 }: SessionRowProps) {
   const colors = useColors();
   const isActive = session.status === "active";
-  const entranceIntensity = useEntranceAnimation({ durationMs: 500 });
-  const skipRef = useRef(skipEntrance);
-  const currentIntensity = isExiting
-    ? (exitIntensity ?? 0)
-    : skipRef.current
-      ? 1
-      : entranceIntensity;
+  const currentIntensity = isExiting ? (exitIntensity ?? 0) : 1;
 
   const effectiveTokens = session.totals.input + session.totals.output;
   const cacheRead = session.totals.cacheRead ?? 0;
@@ -399,7 +391,7 @@ export const SessionsTable = forwardRef(function SessionsTable(
     : Math.max(1, tableInner - narrowFixed);
 
   const getSessionKey = useCallback((s: AgentSessionAggregate) => s.sessionId, []);
-  const { items: animatedSessions, isBulkChange } = useExitAnimation(sessions, {
+  const { items: animatedSessions } = useExitAnimation(sessions, {
     durationMs: 500,
     getKey: getSessionKey,
     bulkThreshold: 100,
@@ -556,7 +548,6 @@ export const SessionsTable = forwardRef(function SessionsTable(
                 getProviderColor={getProviderColor}
                 isExiting={entry.isExiting}
                 exitIntensity={entry.exitIntensity}
-                skipEntrance={isBulkChange}
                 terminalWidth={terminalWidth}
               />
             );

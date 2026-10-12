@@ -1,8 +1,13 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 import { clearCache, getModelPricing, getProviderModels } from "./models-dev.ts";
 
+const originalFetch = globalThis.fetch;
 const mockFetch = mock(() => Promise.resolve(new Response("null")));
 globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 function makeApiResponse(costOverride?: Record<string, unknown>) {
   return {
