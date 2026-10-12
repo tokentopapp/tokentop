@@ -1,21 +1,41 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { PluginPermissionError } from "@tokentop/plugin-sdk";
+import { clearCache, getModelPricing } from "../pricing/models-dev.ts";
 import {
   deepFreeze,
   getActivePluginGuard,
   installGlobalFetchGuard,
   runInPluginGuard,
+  runOutsidePluginGuard,
 } from "./sandbox-guard.ts";
 
 const originalFetch = globalThis.fetch;
 const fetchCalls: string[] = [];
+let mockResponseBody = "ok";
+
+function makeModelsDevResponse() {
+  return {
+    anthropic: {
+      id: "anthropic",
+      name: "Anthropic",
+      models: {
+        "claude-sonnet-4-20250514": {
+          id: "claude-sonnet-4-20250514",
+          name: "Claude Sonnet 4",
+          family: "claude",
+          cost: { input: 3, output: 15 },
+        },
+      },
+    },
+  };
+}
 
 const mockFetch: typeof fetch = Object.assign(
   (input: string | URL | Request, _init?: RequestInit): Promise<Response> => {
     const url =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     fetchCalls.push(url);
-    return Promise.resolve(new Response("ok", { status: 200 }));
+    return Promise.resolve(new Response(mockResponseBody, { status: 200 }));
   },
   { preconnect: originalFetch.preconnect },
 );
@@ -115,6 +135,22 @@ describe("runInPluginGuard and getActivePluginGuard", () => {
     expect(contexts.inner?.pluginId).toBe("inner-plugin");
     expect(contexts.outerAfter?.pluginId).toBe("outer-plugin");
   });
+
+  test("trusted host work temporarily exits and restores plugin context", async () => {
+    const contexts = await runInPluginGuard("outer-plugin", {}, async () => {
+      const before = getActivePluginGuard();
+      const outside = await runOutsidePluginGuard(async () => {
+        await Promise.resolve();
+        return getActivePluginGuard();
+      });
+
+      return { before, outside, after: getActivePluginGuard() };
+    });
+
+    expect(contexts.before?.pluginId).toBe("outer-plugin");
+    expect(contexts.outside).toBeUndefined();
+    expect(contexts.after?.pluginId).toBe("outer-plugin");
+  });
 });
 
 describe("installGlobalFetchGuard", () => {
@@ -184,5 +220,90 @@ describe("installGlobalFetchGuard", () => {
     expect(fetchCalls).toHaveLength(2);
     expect(fetchCalls[0]).toContain("allowed.example/path");
     expect(fetchCalls[1]).toContain("api.allowed.example/path");
+  });
+
+  test("direct plugin requests to models.dev remain blocked", () => {
+    fetchCalls.length = 0;
+
+    expect(() => {
+      runInPluginGuard(
+        "anthropic",
+        {
+          network: {
+            enabled: true,
+            allowedDomains: ["api.anthropic.com"],
+          },
+        },
+        () => {
+          void fetch("https://models.dev/api.json");
+        },
+      );
+    }).toThrow(PluginPermissionError);
+
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  test("host pricing refresh bypasses plugin restrictions without logging a denial", async () => {
+    clearCache();
+    fetchCalls.length = 0;
+    const originalResponseBody = mockResponseBody;
+    mockResponseBody = JSON.stringify(makeModelsDevResponse());
+    const errors: Parameters<typeof console.error>[] = [];
+    const originalError = console.error;
+    console.error = (...args: Parameters<typeof console.error>) => {
+      errors.push(args);
+    };
+
+    try {
+      const result = await runInPluginGuard(
+        "anthropic",
+        {
+          network: {
+            enabled: true,
+            allowedDomains: ["api.anthropic.com"],
+          },
+        },
+        () => getModelPricing("anthropic", "claude-sonnet-4-20250514"),
+      );
+
+      expect(result?.input).toBe(3);
+      expect(result?.output).toBe(15);
+      expect(fetchCalls).toEqual(["https://models.dev/api.json"]);
+      expect(errors).toHaveLength(0);
+    } finally {
+      console.error = originalError;
+      mockResponseBody = originalResponseBody;
+      clearCache();
+    }
+  });
+
+  test("concurrent pricing refreshes share one models.dev request", async () => {
+    clearCache();
+    fetchCalls.length = 0;
+    const originalResponseBody = mockResponseBody;
+    mockResponseBody = JSON.stringify(makeModelsDevResponse());
+
+    try {
+      const results = await runInPluginGuard(
+        "anthropic",
+        {
+          network: {
+            enabled: true,
+            allowedDomains: ["api.anthropic.com"],
+          },
+        },
+        () =>
+          Promise.all([
+            getModelPricing("anthropic", "claude-sonnet-4-20250514"),
+            getModelPricing("anthropic", "claude-sonnet-4-20250514"),
+          ]),
+      );
+
+      expect(results.map((pricing) => pricing?.input)).toEqual([3, 3]);
+      expect(fetchCalls).toEqual(["https://models.dev/api.json"]);
+    } finally {
+      mockResponseBody = originalResponseBody;
+      clearCache();
+    }
   });
 });

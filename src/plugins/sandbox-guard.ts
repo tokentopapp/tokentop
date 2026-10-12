@@ -47,6 +47,15 @@ export function runInPluginGuard<T>(
   return pluginGuardStorage.run({ pluginId, permissions }, fn);
 }
 
+/**
+ * Run trusted host code outside the active plugin permission context.
+ *
+ * @internal Only call from application-owned code; never expose this to plugins.
+ */
+export function runOutsidePluginGuard<T>(fn: () => T): T {
+  return pluginGuardStorage.exit(fn);
+}
+
 // ---------------------------------------------------------------------------
 // Global fetch guard
 // ---------------------------------------------------------------------------
