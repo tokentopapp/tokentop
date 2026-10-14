@@ -46,7 +46,7 @@ That's tokentop.
 
 - **Real-time dashboard** — Live token counts, costs, burn rate, and activity sparklines
 - **11 providers** — Anthropic, OpenAI, Google Gemini, GitHub Copilot, Codex, Perplexity, Antigravity, MiniMax, Zai, OpenCode Zen, Chutes
-- **8 coding agents** — Claude Code, OpenCode, Cursor, Copilot CLI, Gemini CLI, Antigravity, Windsurf, and Pi. See every session with model, tokens, cost, and duration
+- **9 coding agents** — Claude Code, OpenCode, Cursor, Copilot CLI, Gemini CLI, Antigravity, Windsurf, and Pi. See every session with model, tokens, cost, and duration
 - **Budget guardrails** — Daily, weekly, and monthly limits with visual warnings at limit percentages you set
 - **Smart sidebar** — Adaptive panel that breaks down spending by model, project, or agent
 - **Efficiency insights** — Cache leverage, output verbosity, and cost-per-request analysis to help you spend less
@@ -144,7 +144,7 @@ tokentop has 4 main views, switchable with `1`–`4`:
 
 ## Agents
 
-tokentop tracks sessions from 8 coding agents. Each agent is a standalone plugin — built-in agents ship with the app, community agents install from npm.
+tokentop tracks sessions from 9 coding agents. Each agent is a standalone plugin — built-in agents ship with the app, community agents install from npm.
 
 | Agent | What it tracks | Plugin |
 |-------|---------------|--------|
@@ -156,6 +156,7 @@ tokentop tracks sessions from 8 coding agents. Each agent is a standalone plugin
 | [Antigravity](https://tokentop.app/docs/agents/antigravity/) | Sessions, Google OAuth | [`@tokentop/agent-gemini`](https://github.com/tokentopapp/agent-gemini) |
 | [Windsurf](https://tokentop.app/docs/agents/windsurf/) | Sessions, Codeium auth | [`@tokentop/agent-windsurf`](https://github.com/tokentopapp/agent-windsurf) |
 | [Pi](https://github.com/tokentopapp/agent-pi) | Sessions, subagent usage, Pi-based agents such as Prime | [`@tokentop/agent-pi`](https://github.com/tokentopapp/agent-pi) |
+| [Goose](https://github.com/Block-Goose/goose) | Sessions, auth detection, multi-provider support | [`@tokentop/agent-goose`](https://github.com/tokentopapp/agent-goose) |
 
 All agents are auto-discovered — if you have the tool installed, tokentop finds it. See the [agent docs](https://tokentop.app/docs/agents/) for details.
 

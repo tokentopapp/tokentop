@@ -4,3 +4,4 @@ export { default as cursorAgentPlugin } from "@tokentop/agent-cursor";
 export { default as geminiAgentPlugin } from "@tokentop/agent-gemini";
 export { default as opencodeAgentPlugin } from "@tokentop/agent-opencode";
 export { default as piAgentPlugin } from "@tokentop/agent-pi";
+export { default as gooseAgentPlugin } from "@tokentop/agent-goose";

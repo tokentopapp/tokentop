@@ -47,7 +47,8 @@
     "react": "^19.0.0",
     "react-devtools-core": "^8.0.0",
     "web-tree-sitter": "0.25.10",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "@tokentop/agent-goose": "^1.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
