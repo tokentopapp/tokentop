@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/tokentopapp/tokentop/compare/v0.8.1...v0.9.0) (2026-11-16)
+
+
+### Features
+
+* **deps:** update @tokentop/agent-opencode to 1.1.0 for OpenCode 2 sessions ([#130](https://github.com/tokentopapp/tokentop/issues/130)) ([f58dbaa](https://github.com/tokentopapp/tokentop/commit/f58dbaa20754c01378ce43874f131dda173d3008))
+
 ## [0.8.1](https://github.com/tokentopapp/tokentop/compare/v0.8.0...v0.8.1) (2026-10-12)
 
 
