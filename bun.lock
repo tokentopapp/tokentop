@@ -11,7 +11,7 @@
         "@tokentop/agent-copilot-cli": "^1.0.0",
         "@tokentop/agent-cursor": "^1.2.0",
         "@tokentop/agent-gemini": "^1.0.0",
-        "@tokentop/agent-opencode": "^1.0.0",
+        "@tokentop/agent-opencode": "^1.1.0",
         "@tokentop/agent-pi": "^0.2.0",
         "@tokentop/plugin-sdk": "^1.5.0",
         "react": "^19.0.0",
@@ -23,6 +23,7 @@
         "@biomejs/biome": "^2.4.2",
         "@types/bun": "latest",
         "@types/react": "^19.0.0",
+        "typescript": "^5.9.3",
       },
     },
   },
@@ -76,7 +77,7 @@
 
     "@tokentop/agent-gemini": ["@tokentop/agent-gemini@1.0.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-iXbWiSGtBi77Ok0leGbatgVmvuQ+i7TiaA6E3ZYi0uYrrzHDMQjCR9DqpqHThT0O9ghQHggsL0GrAlbHfMPRgw=="],
 
-    "@tokentop/agent-opencode": ["@tokentop/agent-opencode@1.0.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-2Y/1sBULn+VHnQDdVqaWLOTiTCEN5OGPWkZ3C+njmdJVfgAEZ6tL6rV8iFxZvWITV5gr845WV+3m1jZEy/dffw=="],
+    "@tokentop/agent-opencode": ["@tokentop/agent-opencode@1.1.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-Lv+mBAV5g4yvSofZ2c/C5vyQbPamDLDU/yrJgfM1s028MMrFq9LA3Kd9BqERQT80Vv1W25xg3+NRyerlAn7RQA=="],
 
     "@tokentop/agent-pi": ["@tokentop/agent-pi@0.2.0", "", { "peerDependencies": { "@tokentop/plugin-sdk": "^1.0.0" } }, "sha512-1KZFqdPoCxCrBWU+CVPLH3nWYg/+/1VEJHT5kP3mKM0rnEdjiRF1fcr1GBds06PCj84r87EdY4k9zEfTAEqYmA=="],
 
