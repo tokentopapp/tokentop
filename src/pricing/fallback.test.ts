@@ -21,6 +21,31 @@ describe("getFallbackPricing()", () => {
     });
   });
 
+  test("prefers the most specific key when several keys match a dated id", () => {
+    expect(getFallbackPricing("openai", "gpt-4o-mini-2024-07-18")).toEqual({
+      input: 0.15,
+      output: 0.6,
+      cacheRead: 0.075,
+      source: "fallback",
+    });
+    expect(getFallbackPricing("openai", "gpt-4.1-mini-2025-04-14")).toEqual({
+      input: 0.4,
+      output: 1.6,
+      cacheRead: 0.1,
+      source: "fallback",
+    });
+    expect(getFallbackPricing("openai", "o3-mini-2025-01-31")).toEqual({
+      input: 1.1,
+      output: 4.4,
+      source: "fallback",
+    });
+    expect(getFallbackPricing("openai", "o1-mini-2024-09-12")).toEqual({
+      input: 1.1,
+      output: 4.4,
+      source: "fallback",
+    });
+  });
+
   test("returns pricing when a known key includes the model id", () => {
     expect(getFallbackPricing("google", "gemini-2.5")).toEqual({
       input: 1.25,

@@ -77,8 +77,20 @@ export function getFallbackPricing(providerId: string, modelId: string): ModelPr
   const exactMatch = providerPricing[modelId];
   if (exactMatch) return exactMatch;
 
+  // Several keys can be substrings of the same id (e.g. "gpt-4o" and "gpt-4o-mini" for
+  // "gpt-4o-mini-2024-07-18"); the longest key is the most specific match.
+  let bestKey = "";
+  let bestPricing: ModelPricing | null = null;
   for (const [key, pricing] of Object.entries(providerPricing)) {
-    if (modelId.includes(key) || key.includes(modelId)) {
+    if (modelId.includes(key) && key.length > bestKey.length) {
+      bestKey = key;
+      bestPricing = pricing;
+    }
+  }
+  if (bestPricing) return bestPricing;
+
+  for (const [key, pricing] of Object.entries(providerPricing)) {
+    if (key.includes(modelId)) {
       return pricing;
     }
   }
