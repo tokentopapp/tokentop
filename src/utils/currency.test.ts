@@ -38,6 +38,16 @@ describe("parseCurrencyInput", () => {
     expect(parseCurrencyInput("1,234")).toBe(1234);
   });
 
+  test("treats repeated commas as thousands separators", () => {
+    expect(parseCurrencyInput("1,000,000")).toBe(1000000);
+    expect(parseCurrencyInput("1,234,567")).toBe(1234567);
+    expect(parseCurrencyInput("$1,500,000.50")).toBe(1500000.5);
+  });
+
+  test("treats repeated periods as thousands separators", () => {
+    expect(parseCurrencyInput("1.234.567")).toBe(1234567);
+  });
+
   test("returns null for invalid input", () => {
     expect(parseCurrencyInput("abc")).toBeNull();
   });
