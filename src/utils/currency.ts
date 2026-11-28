@@ -28,11 +28,17 @@ export function parseCurrencyInput(input: string): number | null {
     // 3 digits after comma = thousands separator (1,234), otherwise decimal (10,50)
     const afterComma = parts[1]?.length ?? 0;
     const beforeComma = parts[0]?.length ?? 0;
-    if (parts.length === 2 && afterComma === 3 && beforeComma > 0) {
+    if (parts.length > 2) {
+      // Repeated commas can only be thousands separators (1,000,000)
+      normalized = normalized.replace(/,/g, "");
+    } else if (parts.length === 2 && afterComma === 3 && beforeComma > 0) {
       normalized = normalized.replace(",", "");
     } else {
       normalized = normalized.replace(",", ".");
     }
+  } else if (hasPeriod && normalized.split(".").length > 2) {
+    // Repeated periods can only be thousands separators (1.234.567)
+    normalized = normalized.replace(/\./g, "");
   }
 
   const parsed = parseFloat(normalized);
