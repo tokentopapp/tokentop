@@ -216,7 +216,7 @@ export async function loadNpmPlugin(
 ): Promise<PluginLoadResult<AnyPlugin>> {
   const pluginTypes = ["provider", "agent", "theme", "notification"];
 
-  const cleanName = packageName.replace(/@[^@]*$/, "");
+  const cleanName = packageName.replace(/(?<=.)@[^@]*$/, "");
 
   const isOfficial = pluginTypes.some((t) => cleanName.startsWith(`@tokentop/${t}-`));
   const isCommunity = pluginTypes.some((t) => cleanName.startsWith(`tokentop-${t}-`));

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { CURRENT_API_VERSION } from "@tokentop/plugin-sdk";
-import { validatePlugin } from "./loader.ts";
+import { loadNpmPlugin, validatePlugin } from "./loader.ts";
 
 const validPlugin = {
   id: "test-plugin",
@@ -191,5 +191,38 @@ describe("validatePlugin", () => {
 
     const result = await validatePlugin(themePlugin);
     expect(result.valid).toBe(true);
+  });
+});
+
+describe("loadNpmPlugin name validation", () => {
+  const invalidName = "Invalid npm plugin name";
+
+  test.each([
+    "@tokentop/provider-foo",
+    "@tokentop/provider-foo@1.2.3",
+    "tokentop-provider-foo",
+    "tokentop-provider-foo@1.0.0",
+    "@me/tokentop-agent-x",
+    "@me/tokentop-agent-x@2.0.0",
+  ])("accepts the package name %s", async (name) => {
+    const result = await loadNpmPlugin(name, "/nonexistent/tokentop-test-plugin.js");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).not.toContain(invalidName);
+    }
+  });
+
+  test.each([
+    "lodash",
+    "@me/lodash",
+    "@tokentop/other-foo@1.0.0",
+  ])("rejects the package name %s", async (name) => {
+    const result = await loadNpmPlugin(name, "/nonexistent/tokentop-test-plugin.js");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain(invalidName);
+    }
   });
 });
