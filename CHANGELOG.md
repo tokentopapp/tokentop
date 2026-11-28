@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/tokentopapp/tokentop/compare/v0.9.0...v0.9.1) (2026-11-28)
+
+
+### Bug Fixes
+
+* **plugins:** accept unversioned scoped npm plugin names ([#139](https://github.com/tokentopapp/tokentop/issues/139)) ([3a31a13](https://github.com/tokentopapp/tokentop/commit/3a31a13c492ffa2a8936e966e8e381fd91e5b64d)), closes [#137](https://github.com/tokentopapp/tokentop/issues/137)
+
 ## [0.9.0](https://github.com/tokentopapp/tokentop/compare/v0.8.1...v0.9.0) (2026-11-16)
 
 
